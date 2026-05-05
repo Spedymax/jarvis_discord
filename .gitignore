@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets / runtime data
+.env
+data/
+logs/
+*.sqlite
+*.sqlite-journal
+
+# Lavalink
+lavalink/plugins/*.jar
+!lavalink/plugins/.gitkeep
