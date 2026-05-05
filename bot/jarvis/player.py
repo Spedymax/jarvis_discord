@@ -64,3 +64,42 @@ class GuildPlayer:
             return
 
         # Empty queue, no loop — caller will start the idle timer.
+
+    def start_idle_timer(self) -> None:
+        self.cancel_idle_timer()
+        self.idle_task = asyncio.create_task(self._idle_disconnect())
+
+    def cancel_idle_timer(self) -> None:
+        if self.idle_task is not None and not self.idle_task.done():
+            self.idle_task.cancel()
+        self.idle_task = None
+
+    async def _idle_disconnect(self) -> None:
+        try:
+            await asyncio.sleep(IDLE_DISCONNECT_SECONDS)
+        except asyncio.CancelledError:
+            return
+        try:
+            await self.wl.disconnect()
+        except Exception:
+            log.exception("Failed to disconnect on idle")
+        if self.nowplaying_msg is not None:
+            try:
+                await self.nowplaying_msg.delete()
+            except Exception:
+                pass
+            self.nowplaying_msg = None
+
+    async def apply_bassboost(self, mode: BassboostMode) -> None:
+        self.bassboost = mode
+        try:
+            import wavelink
+            filters = wavelink.Filters()
+            filters.equalizer.set(bands=[
+                {"band": i, "gain": g}
+                for i, g in enumerate(BASSBOOST_BANDS[mode])
+            ])
+            await self.wl.set_filters(filters)
+        except ImportError:
+            # Tests run without wavelink importable in the path; pass raw bands
+            await self.wl.set_filters(BASSBOOST_BANDS[mode])
