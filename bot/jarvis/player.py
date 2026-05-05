@@ -43,3 +43,24 @@ class GuildPlayer:
             await self.wl.play(track)
             return
         self.wl.queue.put_at(0, track)
+
+    async def handle_track_end(self, track: Any) -> None:
+        """Called from on_wavelink_track_end. Decides what plays next."""
+        if self.loop_mode == "track":
+            await self.wl.play(track)
+            return
+
+        if self.wl.queue:
+            await self.wl.play(self.wl.queue.get())
+            return
+
+        if self.loop_mode == "queue" and self.wl.queue.history:
+            history = list(self.wl.queue.history)
+            self.wl.queue.history.clear()
+            for t in history:
+                await self.wl.queue.put_wait(t)
+            if self.wl.queue:
+                await self.wl.play(self.wl.queue.get())
+            return
+
+        # Empty queue, no loop — caller will start the idle timer.
