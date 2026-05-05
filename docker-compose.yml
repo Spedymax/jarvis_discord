@@ -1,0 +1,45 @@
+services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    container_name: jarvis-lavalink
+    restart: unless-stopped
+    environment:
+      LAVALINK_PASSWORD: ${LAVALINK_PASSWORD}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
+      JAVA_OPTS: "-Xmx512m"
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
+      - ./lavalink/plugins:/opt/Lavalink/plugins
+      - ./logs/lavalink:/var/log/lavalink
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- --header=\"Authorization: $$LAVALINK_PASSWORD\" http://localhost:2333/version || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: jarvis-bot
+    restart: unless-stopped
+    depends_on:
+      lavalink:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      LAVALINK_HOST: lavalink
+      LAVALINK_PORT: "2333"
+    volumes:
+      - ./data:/app/data
+      - ./logs/bot:/app/logs
+    networks: [internal]
+    mem_limit: 512m
+
+networks:
+  internal:
+    driver: bridge
