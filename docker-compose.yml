@@ -12,6 +12,7 @@ services:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
       - ./lavalink/plugins:/opt/Lavalink/plugins
       - ./logs/lavalink:/var/log/lavalink
+      - ./data/sounds:/app/data/sounds:ro
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- --header=\"Authorization: $$LAVALINK_PASSWORD\" http://localhost:2333/version || exit 1"]

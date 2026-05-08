@@ -23,6 +23,12 @@ class GuildPlayer:
     loop_mode: LoopMode = "off"
     bassboost: BassboostMode = "off"
     nowplaying_msg: discord.Message | None = None
+    text_channel: discord.abc.Messageable | None = None
+    requesters: dict[str, str] = field(default_factory=dict)
+    current_track: Any | None = None
+    playing_sound: bool = False
+    interrupted_track: Any | None = None
+    interrupted_position_ms: int = 0
     idle_task: asyncio.Task[None] | None = field(default=None, repr=False)
 
     async def add(self, track: Any) -> None:

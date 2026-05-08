@@ -20,3 +20,8 @@ logs/
 # Lavalink
 lavalink/plugins/*.jar
 !lavalink/plugins/.gitkeep
+
+# Tooling artefacts
+.claude/
+.omc/
+**/.omc/

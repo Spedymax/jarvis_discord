@@ -18,6 +18,7 @@ from ..errors import (
 )
 from ..player import GuildPlayer
 from ..sources import to_lavalink_query
+from ..ui.card import refresh_now_playing
 
 log = logging.getLogger(__name__)
 
@@ -44,13 +45,21 @@ async def _ensure_player(interaction: discord.Interaction) -> GuildPlayer:
     if gp is not None:
         if gp.wl.channel.id != voice.channel.id:
             raise WrongVoiceChannelError()
+        gp.text_channel = interaction.channel
         return gp
 
     wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
     wl_player.autoplay = wavelink.AutoPlayMode.partial
-    gp = GuildPlayer(wl=wl_player)
+    gp = GuildPlayer(wl=wl_player, text_channel=interaction.channel)
     state.register(interaction.guild_id, gp)  # type: ignore[arg-type]
     return gp
+
+
+def _remember_requester(gp: GuildPlayer, track: wavelink.Playable) -> None:
+    name = getattr(track, "requester_name", None)
+    identifier = getattr(track, "identifier", None)
+    if name and identifier:
+        gp.requesters[identifier] = name
 
 
 class Music(commands.Cog):
@@ -64,7 +73,9 @@ class Music(commands.Cog):
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
         track = await _resolve_first_track(query, interaction.user)
+        _remember_requester(gp, track)
         await gp.add(track)
+        await refresh_now_playing(gp)
         await interaction.followup.send(f"➕ В очередь: **{track.title}**")
 
     @app_commands.command(description="Скипнуть всё и сыграть этот трек прямо сейчас.")
@@ -74,6 +85,7 @@ class Music(commands.Cog):
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
         track = await _resolve_first_track(query, interaction.user)
+        _remember_requester(gp, track)
         await gp.play_skip(track)
         await interaction.followup.send(f"⏭ Сейчас играет: **{track.title}**")
 
@@ -84,7 +96,9 @@ class Music(commands.Cog):
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
         track = await _resolve_first_track(query, interaction.user)
+        _remember_requester(gp, track)
         await gp.play_next(track)
+        await refresh_now_playing(gp)
         await interaction.followup.send(f"⏩ Следующим: **{track.title}**")
 
     @app_commands.command(description="Пропустить текущий трек.")

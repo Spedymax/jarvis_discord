@@ -15,6 +15,9 @@ def _format_duration(ms: int) -> str:
     return f"{m}:{s:02d}"
 
 
+NOWPLAYING_IMAGE_FILENAME = "nowplaying.jpg"
+
+
 def build_nowplaying_embed(
     track: Any,
     queue: Any,
@@ -57,4 +60,5 @@ def build_nowplaying_embed(
         preview = "\n".join(f"`{i+1}.` {t.title}" for i, t in enumerate(upcoming))
         embed.add_field(name="Дальше", value=preview, inline=False)
 
+    embed.set_image(url=f"attachment://{NOWPLAYING_IMAGE_FILENAME}")
     return embed

@@ -8,6 +8,7 @@ import discord
 
 from ..filters_presets import BASSBOOST_CYCLE, next_bassboost
 from ..player import LoopMode
+from .card import build_card_file
 
 if TYPE_CHECKING:
     from ..player import GuildPlayer
@@ -83,16 +84,22 @@ class ControlsView(discord.ui.View):
         if not await self._guard(interaction):
             return
         self.gp.loop_mode = _next_loop(self.gp.loop_mode)
-        await interaction.response.send_message(
-            f"🔁 Loop: **{self.gp.loop_mode}**", ephemeral=True
-        )
+        file = build_card_file(self.gp)
+        if file is not None:
+            await interaction.response.edit_message(attachments=[file], view=self)
+        else:
+            await interaction.response.defer()
 
     @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=1)
     async def shuffle(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         if not await self._guard(interaction):
             return
         self.gp.wl.queue.shuffle()
-        await interaction.response.send_message("🔀 Очередь перемешана.", ephemeral=True)
+        file = build_card_file(self.gp)
+        if file is not None:
+            await interaction.response.edit_message(attachments=[file], view=self)
+        else:
+            await interaction.response.defer()
 
     @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.secondary, row=1)
     async def vol_down(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
@@ -116,6 +123,8 @@ class ControlsView(discord.ui.View):
             return
         new_mode = next_bassboost(self.gp.bassboost)
         await self.gp.apply_bassboost(new_mode)
-        await interaction.response.send_message(
-            f"🎚 Bassboost: **{new_mode}**", ephemeral=True
-        )
+        file = build_card_file(self.gp)
+        if file is not None:
+            await interaction.response.edit_message(attachments=[file], view=self)
+        else:
+            await interaction.response.defer()

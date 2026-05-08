@@ -13,8 +13,8 @@ from .config import Settings
 from .db import init_db
 from .errors import JarvisError
 from .logging_setup import setup_logging
+from .ui.card import build_card_file
 from .ui.controls import ControlsView
-from .ui.embed import build_nowplaying_embed
 
 log = logging.getLogger("jarvis")
 
@@ -35,7 +35,12 @@ def build_bot(settings: Settings) -> commands.Bot:
         )
         await wavelink.Pool.connect(client=bot, nodes=[node])
 
-        for ext in ("jarvis.cogs.music", "jarvis.cogs.queue", "jarvis.cogs.filters"):
+        for ext in (
+            "jarvis.cogs.music",
+            "jarvis.cogs.queue",
+            "jarvis.cogs.filters",
+            "jarvis.cogs.sound",
+        ):
             await bot.load_extension(ext)
 
         if settings.dev_guild_ids:
@@ -62,24 +67,45 @@ def build_bot(settings: Settings) -> commands.Bot:
         if gp is None:
             return
         gp.cancel_idle_timer()
-        embed = build_nowplaying_embed(
-            payload.track, gp.wl.queue,
-            loop_mode=gp.loop_mode, bassboost=gp.bassboost,
-        )
+        if gp.playing_sound:
+            return
+        track = payload.track
+        if not getattr(track, "requester_name", None):
+            remembered = gp.requesters.get(getattr(track, "identifier", ""), None)
+            if remembered:
+                track.requester_name = remembered
+        gp.current_track = track
         view = ControlsView(gp)
         if gp.nowplaying_msg is not None:
             try:
                 await gp.nowplaying_msg.delete()
             except Exception:
                 pass
-        text_channel = _pick_text_channel(payload.player)
-        if text_channel is not None:
-            gp.nowplaying_msg = await text_channel.send(embed=embed, view=view)
+            gp.nowplaying_msg = None
+        text_channel = gp.text_channel or _pick_text_channel(payload.player)
+        if text_channel is None:
+            return
+        file = build_card_file(gp)
+        if file is None:
+            return
+        gp.nowplaying_msg = await text_channel.send(file=file, view=view)
 
     @bot.event
     async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload) -> None:
         gp = state.get(payload.player.guild.id)
         if gp is None:
+            return
+        if gp.playing_sound:
+            gp.playing_sound = False
+            saved = gp.interrupted_track
+            pos = gp.interrupted_position_ms
+            gp.interrupted_track = None
+            gp.interrupted_position_ms = 0
+            if saved is not None:
+                try:
+                    await gp.wl.play(saved, start=pos)
+                except Exception:
+                    log.exception("Failed to resume after sound")
             return
         await gp.handle_track_end(payload.track)
         if not gp.wl.playing and not gp.wl.queue:
