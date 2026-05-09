@@ -232,3 +232,49 @@ def test_snapshot_no_text_channel() -> None:
     gp = GuildPlayer(wl=wl, text_channel=None)
     row = gp.snapshot(updated_at=0)
     assert row.text_channel_id is None
+
+
+# ---- touch_persist + position ticker tests (Epic 3) ----
+
+import asyncio
+
+
+@pytest.mark.asyncio
+async def test_touch_persist_calls_save_after_debounce(monkeypatch) -> None:
+    saved_rows: list[PlayerStateRow] = []
+
+    async def fake_save(row: PlayerStateRow) -> None:
+        saved_rows.append(row)
+
+    import jarvis.player as player_mod
+    monkeypatch.setattr(player_mod, "save_player_state", fake_save)
+
+    wl = _mock_wl(guild_id=10)
+    gp = GuildPlayer(wl=wl)
+    gp.touch_persist()
+    assert saved_rows == []  # no immediate save
+    await asyncio.sleep(1.1)
+    assert len(saved_rows) == 1
+    assert saved_rows[0].guild_id == 10
+
+
+@pytest.mark.asyncio
+async def test_touch_persist_coalesces_multiple_calls(monkeypatch) -> None:
+    saved_rows: list[PlayerStateRow] = []
+
+    async def fake_save(row: PlayerStateRow) -> None:
+        saved_rows.append(row)
+
+    import jarvis.player as player_mod
+    monkeypatch.setattr(player_mod, "save_player_state", fake_save)
+
+    wl = _mock_wl()
+    gp = GuildPlayer(wl=wl)
+    gp.touch_persist()
+    await asyncio.sleep(0.2)
+    gp.touch_persist()
+    await asyncio.sleep(0.2)
+    gp.touch_persist()
+    await asyncio.sleep(1.0)
+    # all three calls coalesced into one save
+    assert len(saved_rows) == 1

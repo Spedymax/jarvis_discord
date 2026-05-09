@@ -4,13 +4,14 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
+import time
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import discord
 
 from .filters_presets import BASSBOOST_BANDS, BassboostMode
-from .persistence import PlayerStateRow
+from .persistence import PlayerStateRow, save_player_state
 
 LoopMode = Literal["off", "track", "queue"]
 
@@ -34,6 +35,11 @@ class GuildPlayer:
     interrupted_position_ms: int = 0
     sound_interaction: Any | None = None
     idle_task: asyncio.Task[None] | None = field(default=None, repr=False)
+    persist_task: asyncio.Task[None] | None = field(default=None, repr=False)
+    position_ticker_task: asyncio.Task[None] | None = field(default=None, repr=False)
+
+    PERSIST_DEBOUNCE_SECONDS: ClassVar[float] = 1.0
+    POSITION_TICK_SECONDS: ClassVar[float] = 15.0
 
     async def add(self, track: Any) -> None:
         """Append to queue; start playback if idle."""
@@ -188,3 +194,37 @@ class GuildPlayer:
             queue_json=_json.dumps(queue_payload),
             updated_at=updated_at,
         )
+
+    def touch_persist(self) -> None:
+        """Schedule a debounced state save. Idempotent within PERSIST_DEBOUNCE_SECONDS."""
+        if self.persist_task is not None and not self.persist_task.done():
+            return
+        self.persist_task = asyncio.create_task(self._persist_after_debounce())
+
+    async def _persist_after_debounce(self) -> None:
+        try:
+            await asyncio.sleep(self.PERSIST_DEBOUNCE_SECONDS)
+            row = self.snapshot(updated_at=int(time.time()))
+            await save_player_state(row)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            log.exception("Persist failed")
+
+    def start_position_ticker(self) -> None:
+        """Start periodic position save every POSITION_TICK_SECONDS."""
+        self.cancel_position_ticker()
+        self.position_ticker_task = asyncio.create_task(self._position_ticker())
+
+    def cancel_position_ticker(self) -> None:
+        if self.position_ticker_task is not None and not self.position_ticker_task.done():
+            self.position_ticker_task.cancel()
+        self.position_ticker_task = None
+
+    async def _position_ticker(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(self.POSITION_TICK_SECONDS)
+                self.touch_persist()
+        except asyncio.CancelledError:
+            return
