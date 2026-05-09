@@ -88,6 +88,8 @@ def build_bot(settings: Settings) -> commands.Bot:
     @bot.event
     async def on_wavelink_track_start(payload: wavelink.TrackStartEventPayload) -> None:
         try:
+            if payload.player is None or payload.player.guild is None:
+                return
             gp = state.get(payload.player.guild.id)
             if gp is None:
                 return
@@ -124,6 +126,8 @@ def build_bot(settings: Settings) -> commands.Bot:
     @bot.event
     async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload) -> None:
         try:
+            if payload.player is None or payload.player.guild is None:
+                return
             gp = state.get(payload.player.guild.id)
             if gp is None:
                 return
@@ -275,18 +279,37 @@ def _pick_text_channel(player: wavelink.Player) -> discord.TextChannel | None:
 async def _decode_track(encoded: str) -> wavelink.Playable | None:
     """Reconstruct a Playable from a Lavalink encoded base64 string.
 
-    Wavelink 3.x: Pool.fetch_tracks accepts encoded strings; first element is the track.
-    Returns None on failure — caller should skip and try next from queue.
+    wavelink 3.x Pool.fetch_tracks accepts URLs/search queries, NOT raw encoded.
+    Use Lavalink v4 /decodetrack endpoint via the active Node's REST client to
+    get the full TrackPayload, then construct Playable(data=...).
     """
     try:
-        tracks = await wavelink.Pool.fetch_tracks(encoded)
+        node = wavelink.Pool.get_node()
     except Exception:
-        log.exception("Failed to decode track")
+        log.exception("No wavelink node available")
+        return None
+
+    try:
+        # wavelink 3.x exposes Node.send for raw REST calls.
+        data = await node.send(
+            "GET",
+            path="v4/decodetrack",
+            params={"encodedTrack": encoded},
+        )
+    except Exception:
+        log.exception("Lavalink /v4/decodetrack failed")
         sentry_sdk.capture_exception()
         return None
-    if not tracks:
+
+    if not data:
         return None
-    return tracks[0]
+
+    try:
+        return wavelink.Playable(data=data)
+    except Exception:
+        log.exception("Playable construction from decoded data failed")
+        sentry_sdk.capture_exception()
+        return None
 
 
 async def restore_players(bot: commands.Bot) -> None:
