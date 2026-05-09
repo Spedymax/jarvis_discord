@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from . import state
 from .config import Settings
+from .player import GuildPlayer
 from .db import init_db
 from .errors import JarvisError
 from .logging_setup import setup_logging
@@ -60,9 +61,19 @@ def build_bot(settings: Settings) -> commands.Bot:
             await bot.tree.sync()
             log.info("Synced commands globally")
 
+    _restored = {"done": False}
+
     @bot.event
     async def on_ready() -> None:
         log.info("Logged in as %s (id=%s)", bot.user, bot.user.id if bot.user else "?")
+        if _restored["done"]:
+            return
+        _restored["done"] = True
+        try:
+            await restore_players(bot)
+        except Exception:
+            log.exception("restore_players failed")
+            sentry_sdk.capture_exception()
 
     @bot.event
     async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload) -> None:
@@ -252,6 +263,127 @@ def _pick_text_channel(player: wavelink.Player) -> discord.TextChannel | None:
         if ch.permissions_for(guild.me).send_messages:
             return ch
     return None
+
+
+async def _decode_track(encoded: str) -> wavelink.Playable | None:
+    """Reconstruct a Playable from a Lavalink encoded base64 string.
+
+    Wavelink 3.x: Pool.fetch_tracks accepts encoded strings; first element is the track.
+    Returns None on failure — caller should skip and try next from queue.
+    """
+    try:
+        tracks = await wavelink.Pool.fetch_tracks(encoded)
+    except Exception:
+        log.exception("Failed to decode track")
+        sentry_sdk.capture_exception()
+        return None
+    if not tracks:
+        return None
+    return tracks[0]
+
+
+async def restore_players(bot: commands.Bot) -> None:
+    """Read all player_state rows, reconnect to voice, resume playback."""
+    from .persistence import delete_player_state, load_all
+
+    rows = await load_all()
+    if not rows:
+        log.info("No player_state rows to restore")
+        return
+
+    log.info("Restoring %d player(s) from player_state", len(rows))
+    for row in rows:
+        guild = bot.get_guild(row.guild_id)
+        if guild is None:
+            log.warning("Guild %s missing — dropping state", row.guild_id)
+            await delete_player_state(row.guild_id)
+            continue
+
+        voice_channel = guild.get_channel(row.voice_channel_id)
+        if not isinstance(voice_channel, discord.VoiceChannel):
+            log.warning(
+                "Voice channel %s missing in guild %s — dropping state",
+                row.voice_channel_id,
+                row.guild_id,
+            )
+            await delete_player_state(row.guild_id)
+            continue
+
+        humans = [m for m in voice_channel.members if not m.bot]
+        if not humans:
+            log.info("Voice channel %s empty — dropping state", row.voice_channel_id)
+            await delete_player_state(row.guild_id)
+            continue
+
+        try:
+            player = await voice_channel.connect(cls=wavelink.Player)
+        except Exception:
+            log.exception("Failed to connect to voice for guild %s", row.guild_id)
+            sentry_sdk.capture_exception()
+            await delete_player_state(row.guild_id)
+            continue
+
+        gp = GuildPlayer(wl=player, loop_mode=row.loop_mode, bassboost=row.bassboost)  # type: ignore[arg-type]
+        if isinstance(row.text_channel_id, int):
+            tc = guild.get_channel(row.text_channel_id)
+            if isinstance(tc, discord.TextChannel):
+                gp.text_channel = tc
+
+        if row.bassboost != "off":
+            try:
+                await gp.apply_bassboost(row.bassboost)  # type: ignore[arg-type]
+            except Exception:
+                log.exception("Failed to apply bassboost on restore")
+                sentry_sdk.capture_exception()
+
+        # Hydrate queue
+        import json as _json
+        try:
+            queue_payload = _json.loads(row.queue_json)
+        except Exception:
+            queue_payload = []
+
+        for entry in queue_payload:
+            encoded = entry.get("encoded") if isinstance(entry, dict) else None
+            if not encoded:
+                continue
+            track = await _decode_track(encoded)
+            if track is None:
+                continue
+            requester = entry.get("requester") if isinstance(entry, dict) else None
+            if requester:
+                track.requester_name = requester  # type: ignore[attr-defined]
+                gp.requesters[getattr(track, "identifier", encoded)] = requester
+            await player.queue.put_wait(track)
+
+        state.register(row.guild_id, gp)
+
+        if row.current_encoded:
+            track = await _decode_track(row.current_encoded)
+            if track is not None:
+                if row.current_requester:
+                    track.requester_name = row.current_requester  # type: ignore[attr-defined]
+                    gp.requesters[getattr(track, "identifier", row.current_encoded)] = row.current_requester
+                try:
+                    await player.play(track, start=row.current_position_ms)
+                    log.info(
+                        "Resumed guild %s: track at %dms, queue=%d",
+                        row.guild_id,
+                        row.current_position_ms,
+                        len(player.queue),
+                    )
+                except Exception:
+                    log.exception("Failed to resume track for guild %s", row.guild_id)
+                    sentry_sdk.capture_exception()
+            else:
+                log.warning("Current track decode failed in guild %s — skipping", row.guild_id)
+                if player.queue:
+                    next_track = player.queue.get()
+                    try:
+                        await player.play(next_track)
+                    except Exception:
+                        log.exception("Failed to play fallback queue track")
+                        sentry_sdk.capture_exception()
 
 
 async def main() -> None:
