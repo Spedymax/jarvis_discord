@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -9,6 +10,7 @@ from typing import Any, Literal
 import discord
 
 from .filters_presets import BASSBOOST_BANDS, BassboostMode
+from .persistence import PlayerStateRow
 
 LoopMode = Literal["off", "track", "queue"]
 
@@ -144,3 +146,45 @@ class GuildPlayer:
         except ImportError:
             # Tests run without wavelink importable in the path; pass raw bands
             await self.wl.set_filters(BASSBOOST_BANDS[mode])
+
+    def snapshot(self, *, updated_at: int) -> PlayerStateRow:
+        """Serialize current player state into a PlayerStateRow."""
+        guild_id = int(self.wl.guild.id)
+        voice_channel_id = int(self.wl.channel.id)
+        text_channel_id: int | None = None
+        if self.text_channel is not None:
+            tc_id = getattr(self.text_channel, "id", None)
+            if tc_id is not None:
+                text_channel_id = int(tc_id)
+
+        cur = self.current_track
+        if cur is not None:
+            current_encoded = getattr(cur, "encoded", None)
+            current_requester = getattr(cur, "requester_name", None)
+            current_position_ms = int(getattr(self.wl, "position", 0) or 0)
+        else:
+            current_encoded = None
+            current_requester = None
+            current_position_ms = 0
+
+        queue_payload: list[dict[str, Any]] = []
+        for t in list(self.wl.queue):
+            queue_payload.append(
+                {
+                    "encoded": getattr(t, "encoded", None),
+                    "requester": getattr(t, "requester_name", None),
+                }
+            )
+
+        return PlayerStateRow(
+            guild_id=guild_id,
+            voice_channel_id=voice_channel_id,
+            text_channel_id=text_channel_id,
+            current_encoded=current_encoded,
+            current_position_ms=current_position_ms,
+            current_requester=current_requester,
+            loop_mode=self.loop_mode,
+            bassboost=self.bassboost,
+            queue_json=_json.dumps(queue_payload),
+            updated_at=updated_at,
+        )

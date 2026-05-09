@@ -155,3 +155,80 @@ async def test_apply_bassboost_calls_set_filters(fake_player) -> None:
 
     assert gp.bassboost == "medium"
     fake_player.set_filters.assert_awaited_once()
+
+
+# ---- snapshot tests (Epic 3) ----
+
+import json as _json
+from types import SimpleNamespace
+
+from jarvis.persistence import PlayerStateRow
+
+
+def _mock_track(encoded: str, requester_name: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(encoded=encoded, requester_name=requester_name, identifier=encoded)
+
+
+def _mock_wl(
+    *,
+    guild_id: int = 100,
+    channel_id: int = 200,
+    position_ms: int = 0,
+    queue_tracks: list[SimpleNamespace] | None = None,
+) -> SimpleNamespace:
+    queue_list = list(queue_tracks or [])
+    return SimpleNamespace(
+        guild=SimpleNamespace(id=guild_id),
+        channel=SimpleNamespace(id=channel_id),
+        position=position_ms,
+        queue=queue_list,
+        playing=True,
+        current=None,
+    )
+
+
+def test_snapshot_basic_fields() -> None:
+    wl = _mock_wl(guild_id=1, channel_id=2, position_ms=12345, queue_tracks=[])
+    text_channel = SimpleNamespace(id=3)
+    gp = GuildPlayer(wl=wl, loop_mode="track", bassboost="strong", text_channel=text_channel)
+    gp.current_track = _mock_track("CUR", requester_name="alice")
+    row = gp.snapshot(updated_at=42)
+    assert isinstance(row, PlayerStateRow)
+    assert row.guild_id == 1
+    assert row.voice_channel_id == 2
+    assert row.text_channel_id == 3
+    assert row.current_encoded == "CUR"
+    assert row.current_position_ms == 12345
+    assert row.current_requester == "alice"
+    assert row.loop_mode == "track"
+    assert row.bassboost == "strong"
+    assert row.queue_json == _json.dumps([])
+    assert row.updated_at == 42
+
+
+def test_snapshot_serializes_queue_with_requester() -> None:
+    q = [_mock_track("T1", "bob"), _mock_track("T2", None)]
+    wl = _mock_wl(queue_tracks=q)
+    gp = GuildPlayer(wl=wl)
+    row = gp.snapshot(updated_at=0)
+    assert _json.loads(row.queue_json) == [
+        {"encoded": "T1", "requester": "bob"},
+        {"encoded": "T2", "requester": None},
+    ]
+
+
+def test_snapshot_no_current_track() -> None:
+    wl = _mock_wl()
+    gp = GuildPlayer(wl=wl)
+    gp.current_track = None
+    row = gp.snapshot(updated_at=0)
+    assert row.current_encoded is None
+    assert row.current_position_ms == 0
+    assert row.current_requester is None
+
+
+def test_snapshot_no_text_channel() -> None:
+    wl = _mock_wl()
+    gp = GuildPlayer(wl=wl, text_channel=None)
+    row = gp.snapshot(updated_at=0)
+    assert row.text_channel_id is None
