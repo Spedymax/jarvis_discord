@@ -20,6 +20,9 @@ class Settings:
     log_level: str
     data_dir: Path
     log_dir: Path
+    sentry_dsn: str
+    environment: str
+    git_sha: str
 
     @staticmethod
     def from_env() -> "Settings":
@@ -35,6 +38,9 @@ class Settings:
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
             data_dir=Path(os.environ.get("DATA_DIR", "/app/data")),
             log_dir=Path(os.environ.get("LOG_DIR", "/app/logs")),
+            sentry_dsn=os.environ.get("SENTRY_DSN", "").strip(),
+            environment=os.environ.get("ENVIRONMENT", "prod").strip() or "prod",
+            git_sha=os.environ.get("GIT_SHA", "").strip(),
         )
 
 
