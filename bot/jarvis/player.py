@@ -26,9 +26,11 @@ class GuildPlayer:
     text_channel: discord.abc.Messageable | None = None
     requesters: dict[str, str] = field(default_factory=dict)
     current_track: Any | None = None
+    current_background: Any | None = None
     playing_sound: bool = False
     interrupted_track: Any | None = None
     interrupted_position_ms: int = 0
+    sound_interaction: Any | None = None
     idle_task: asyncio.Task[None] | None = field(default=None, repr=False)
 
     async def add(self, track: Any) -> None:
@@ -38,10 +40,31 @@ class GuildPlayer:
         else:
             await self.wl.queue.put_wait(track)
 
+    async def add_many(self, tracks: list[Any]) -> None:
+        if not tracks:
+            return
+        if not self.wl.playing:
+            first, *rest = tracks
+            await self.wl.play(first)
+            for t in rest:
+                await self.wl.queue.put_wait(t)
+        else:
+            for t in tracks:
+                await self.wl.queue.put_wait(t)
+
     async def play_skip(self, track: Any) -> None:
         """Drop the queue and play this track immediately."""
         self.wl.queue.clear()
         await self.wl.play(track)
+
+    async def play_skip_many(self, tracks: list[Any]) -> None:
+        if not tracks:
+            return
+        self.wl.queue.clear()
+        first, *rest = tracks
+        await self.wl.play(first)
+        for t in rest:
+            await self.wl.queue.put_wait(t)
 
     async def play_next(self, track: Any) -> None:
         """Insert at index 0 — plays right after the current track."""
@@ -49,6 +72,18 @@ class GuildPlayer:
             await self.wl.play(track)
             return
         self.wl.queue.put_at(0, track)
+
+    async def play_next_many(self, tracks: list[Any]) -> None:
+        if not tracks:
+            return
+        if not self.wl.playing:
+            first, *rest = tracks
+            await self.wl.play(first)
+            for t in rest:
+                await self.wl.queue.put_wait(t)
+            return
+        for t in reversed(tracks):
+            self.wl.queue.put_at(0, t)
 
     async def handle_track_end(self, track: Any) -> None:
         """Called from on_wavelink_track_end. Decides what plays next."""

@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _DB_PATH: Path | None = None
 
@@ -36,10 +36,17 @@ async def init_db(path: Path) -> None:
                 length_ms INTEGER NOT NULL,
                 owner_id INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
+                play_count INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (guild_id, name)
             )
             """
         )
+        try:
+            await conn.execute(
+                "ALTER TABLE sounds ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0"
+            )
+        except aiosqlite.OperationalError:
+            pass  # column already exists
         await conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (SCHEMA_VERSION,),
@@ -56,6 +63,7 @@ class Sound:
     length_ms: int
     owner_id: int
     created_at: int
+    play_count: int = 0
 
 
 async def add_sound(
@@ -82,10 +90,23 @@ async def list_sounds(guild_id: int) -> list[Sound]:
     async with aiosqlite.connect(get_db_path()) as conn:
         conn.row_factory = aiosqlite.Row
         rows = await conn.execute_fetchall(
-            "SELECT * FROM sounds WHERE guild_id = ? ORDER BY name COLLATE NOCASE",
+            """
+            SELECT * FROM sounds
+            WHERE guild_id = ?
+            ORDER BY play_count DESC, name COLLATE NOCASE
+            """,
             (guild_id,),
         )
         return [Sound(**dict(r)) for r in rows]
+
+
+async def increment_play_count(sound_id: int) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute(
+            "UPDATE sounds SET play_count = play_count + 1 WHERE id = ?",
+            (sound_id,),
+        )
+        await conn.commit()
 
 
 async def get_sound(guild_id: int, name: str) -> Optional[Sound]:
@@ -105,6 +126,18 @@ async def get_sound_by_id(sound_id: int) -> Optional[Sound]:
         cur = await conn.execute("SELECT * FROM sounds WHERE id = ?", (sound_id,))
         row = await cur.fetchone()
         return Sound(**dict(row)) if row else None
+
+
+async def rename_sound(guild_id: int, old_name: str, new_name: str) -> Optional[Sound]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            "UPDATE sounds SET name = ? WHERE guild_id = ? AND name = ?",
+            (new_name, guild_id, old_name),
+        )
+        await conn.commit()
+        if cur.rowcount == 0:
+            return None
+    return await get_sound(guild_id, new_name)
 
 
 async def delete_sound(guild_id: int, name: str) -> Optional[Sound]:

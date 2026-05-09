@@ -27,7 +27,7 @@ class Filters(commands.Cog):
             raise NotPlayingError()
         await gp.apply_bassboost(mode)
         await refresh_now_playing(gp)
-        await interaction.response.send_message(f"🎚 Bassboost: **{mode}**")
+        await interaction.response.send_message(f"🎚 Bassboost: **{mode}**", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

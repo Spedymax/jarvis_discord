@@ -49,9 +49,9 @@ class QueueCog(commands.Cog):
 
         if len(items) > QUEUE_PREVIEW_SIZE:
             view = _ShowAllView(items)
-            await interaction.response.send_message(embed=embed, view=view)
+            await interaction.response.send_message(embed=embed, view=view, silent=True)
         else:
-            await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, silent=True)
 
     @app_commands.command(description="Режим повтора.")
     @app_commands.describe(mode="off / track / queue")
@@ -65,7 +65,7 @@ class QueueCog(commands.Cog):
             raise NotPlayingError()
         gp.loop_mode = mode
         await refresh_now_playing(gp)
-        await interaction.response.send_message(f"🔁 Loop: **{mode}**")
+        await interaction.response.send_message(f"🔁 Loop: **{mode}**", ephemeral=True)
 
 
 class _ShowAllView(discord.ui.View):

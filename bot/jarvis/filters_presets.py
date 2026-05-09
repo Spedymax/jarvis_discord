@@ -7,9 +7,9 @@ BassboostMode = Literal["off", "low", "medium", "high"]
 
 BASSBOOST_BANDS: dict[BassboostMode, list[float]] = {
     "off":    [0.0] * 15,
-    "low":    [0.25, 0.15, 0.10] + [0.0] * 12,
-    "medium": [0.40, 0.25, 0.15] + [0.0] * 12,
-    "high":   [0.60, 0.40, 0.25, 0.10] + [0.0] * 11,
+    "low":    [0.50, 0.40, 0.30, 0.20] + [0.0] * 11,
+    "medium": [0.75, 0.60, 0.45, 0.30, 0.15] + [0.0] * 10,
+    "high":   [1.00, 0.85, 0.70, 0.50, 0.30, 0.15] + [0.0] * 9,
 }
 
 BASSBOOST_CYCLE: tuple[BassboostMode, ...] = ("off", "low", "medium", "high")

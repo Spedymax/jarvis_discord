@@ -16,8 +16,8 @@ plugins:
       clientId: "${SPOTIFY_CLIENT_ID}"
       clientSecret: "${SPOTIFY_CLIENT_SECRET}"
       countryCode: "US"
-      playlistLoadLimit: 6
-      albumLoadLimit: 6
+      playlistLoadLimit: 100
+      albumLoadLimit: 100
 
   youtube:
     enabled: true
@@ -53,7 +53,7 @@ lavalink:
     resamplingQuality: LOW
     trackStuckThresholdMs: 10000
     useSeekGhosting: true
-    youtubePlaylistLoadLimit: 6
+    youtubePlaylistLoadLimit: 100
     playerUpdateInterval: 5
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true

@@ -23,17 +23,22 @@ from ..ui.card import refresh_now_playing
 log = logging.getLogger(__name__)
 
 
-async def _resolve_first_track(query: str, requester: discord.abc.User) -> wavelink.Playable:
+async def _resolve_tracks(
+    query: str, requester: discord.abc.User
+) -> tuple[list[wavelink.Playable], str | None]:
     lavalink_query = to_lavalink_query(query)
     results = await wavelink.Playable.search(lavalink_query)
     if not results:
         raise TrackNotFoundError()
+    name = getattr(requester, "display_name", str(requester))
     if isinstance(results, wavelink.Playlist):
-        track = results.tracks[0]
-    else:
-        track = results[0]
-    track.requester_name = getattr(requester, "display_name", str(requester))
-    return track
+        tracks = list(results.tracks)
+        for t in tracks:
+            t.requester_name = name
+        return tracks, getattr(results, "name", None)
+    track = results[0]
+    track.requester_name = name
+    return [track], None
 
 
 async def _ensure_player(interaction: discord.Interaction) -> GuildPlayer:
@@ -66,40 +71,67 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(description="Поставить трек в конец очереди.")
+    @app_commands.command(description="Поставить трек или плейлист в конец очереди.")
     @app_commands.describe(query="Ссылка YouTube/SoundCloud/Spotify или название")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        track = await _resolve_first_track(query, interaction.user)
-        _remember_requester(gp, track)
-        await gp.add(track)
+        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        for t in tracks:
+            _remember_requester(gp, t)
+        await gp.add_many(tracks)
         await refresh_now_playing(gp)
-        await interaction.followup.send(f"➕ В очередь: **{track.title}**")
+        if playlist_name and len(tracks) > 1:
+            await interaction.followup.send(
+                f"➕ Плейлист **{playlist_name}** — {len(tracks)} треков в очередь.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                f"➕ В очередь: **{tracks[0].title}**", ephemeral=True
+            )
 
-    @app_commands.command(description="Скипнуть всё и сыграть этот трек прямо сейчас.")
+    @app_commands.command(description="Скипнуть всё и сыграть этот трек/плейлист прямо сейчас.")
     @app_commands.describe(query="Ссылка или название")
     async def playskip(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        track = await _resolve_first_track(query, interaction.user)
-        _remember_requester(gp, track)
-        await gp.play_skip(track)
-        await interaction.followup.send(f"⏭ Сейчас играет: **{track.title}**")
+        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        for t in tracks:
+            _remember_requester(gp, t)
+        await gp.play_skip_many(tracks)
+        if playlist_name and len(tracks) > 1:
+            await interaction.followup.send(
+                f"⏭ Плейлист **{playlist_name}** — {len(tracks)} треков, играет первый.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                f"⏭ Сейчас играет: **{tracks[0].title}**", ephemeral=True
+            )
 
-    @app_commands.command(description="Поставить трек сразу после текущего.")
+    @app_commands.command(description="Поставить трек/плейлист сразу после текущего.")
     @app_commands.describe(query="Ссылка или название")
     async def playnext(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        track = await _resolve_first_track(query, interaction.user)
-        _remember_requester(gp, track)
-        await gp.play_next(track)
+        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        for t in tracks:
+            _remember_requester(gp, t)
+        await gp.play_next_many(tracks)
         await refresh_now_playing(gp)
-        await interaction.followup.send(f"⏩ Следующим: **{track.title}**")
+        if playlist_name and len(tracks) > 1:
+            await interaction.followup.send(
+                f"⏩ Плейлист **{playlist_name}** — {len(tracks)} треков следом.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                f"⏩ Следующим: **{tracks[0].title}**", ephemeral=True
+            )
 
     @app_commands.command(description="Пропустить текущий трек.")
     async def skip(self, interaction: discord.Interaction) -> None:
@@ -107,16 +139,17 @@ class Music(commands.Cog):
         if gp is None or not gp.wl.playing:
             raise NotPlayingError()
         await gp.wl.skip(force=True)
-        await interaction.response.send_message("⏭ Скип.")
+        await interaction.response.send_message("⏭ Скип.", ephemeral=True)
 
     @app_commands.command(description="Очистить очередь и остановить плеер.")
     async def stop(self, interaction: discord.Interaction) -> None:
         gp = state.get(interaction.guild_id)  # type: ignore[arg-type]
         if gp is None:
             raise NotPlayingError()
+        gp.loop_mode = "off"
         gp.wl.queue.clear()
         await gp.wl.skip(force=True)
-        await interaction.response.send_message("⏹ Остановил.")
+        await interaction.response.send_message("⏹ Остановил.", ephemeral=True)
 
     @app_commands.command(description="Пауза.")
     async def pause(self, interaction: discord.Interaction) -> None:
@@ -124,7 +157,7 @@ class Music(commands.Cog):
         if gp is None or not gp.wl.playing:
             raise NotPlayingError()
         await gp.wl.pause(True)
-        await interaction.response.send_message("⏸ Пауза.")
+        await interaction.response.send_message("⏸ Пауза.", ephemeral=True)
 
     @app_commands.command(description="Снять с паузы.")
     async def resume(self, interaction: discord.Interaction) -> None:
@@ -132,7 +165,7 @@ class Music(commands.Cog):
         if gp is None:
             raise NotPlayingError()
         await gp.wl.pause(False)
-        await interaction.response.send_message("▶ Продолжаю.")
+        await interaction.response.send_message("▶ Продолжаю.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:
