@@ -13,7 +13,8 @@ from .config import Settings
 from .db import init_db
 from .errors import JarvisError
 from .logging_setup import setup_logging
-from .ui.card import build_card_file
+from .observability import init_sentry
+from .ui.card import BG_EXT, BG_POOL_DIR, build_card_file, pick_background
 from .ui.controls import ControlsView
 
 log = logging.getLogger("jarvis")
@@ -49,6 +50,11 @@ def build_bot(settings: Settings) -> commands.Bot:
                 bot.tree.copy_global_to(guild=guild)
                 await bot.tree.sync(guild=guild)
                 log.info("Synced commands to dev guild %s", gid)
+            # Wipe any leftover global registrations to avoid duplicates
+            # in clients that already saw the global set.
+            bot.tree.clear_commands(guild=None)
+            await bot.tree.sync()
+            log.info("Cleared global commands")
         else:
             await bot.tree.sync()
             log.info("Synced commands globally")
@@ -67,7 +73,7 @@ def build_bot(settings: Settings) -> commands.Bot:
         if gp is None:
             return
         gp.cancel_idle_timer()
-        if gp.playing_sound:
+        if gp.playing_sound or _is_sound_track(payload.track):
             return
         track = payload.track
         if not getattr(track, "requester_name", None):
@@ -75,6 +81,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             if remembered:
                 track.requester_name = remembered
         gp.current_track = track
+        gp.current_background = pick_background()
         view = ControlsView(gp)
         if gp.nowplaying_msg is not None:
             try:
@@ -88,12 +95,14 @@ def build_bot(settings: Settings) -> commands.Bot:
         file = build_card_file(gp)
         if file is None:
             return
-        gp.nowplaying_msg = await text_channel.send(file=file, view=view)
+        gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
 
     @bot.event
     async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload) -> None:
         gp = state.get(payload.player.guild.id)
         if gp is None:
+            return
+        if _reason_is_replaced(getattr(payload, "reason", None)):
             return
         if gp.playing_sound:
             gp.playing_sound = False
@@ -101,6 +110,12 @@ def build_bot(settings: Settings) -> commands.Bot:
             pos = gp.interrupted_position_ms
             gp.interrupted_track = None
             gp.interrupted_position_ms = 0
+            if gp.sound_interaction is not None:
+                try:
+                    await gp.sound_interaction.delete_original_response()
+                except Exception:
+                    pass
+                gp.sound_interaction = None
             if saved is not None:
                 try:
                     await gp.wl.play(saved, start=pos)
@@ -110,6 +125,41 @@ def build_bot(settings: Settings) -> commands.Bot:
         await gp.handle_track_end(payload.track)
         if not gp.wl.playing and not gp.wl.queue:
             gp.start_idle_timer()
+
+    @bot.event
+    async def on_message(message: discord.Message) -> None:
+        if message.author.bot or message.guild is not None:
+            return
+        if not message.attachments:
+            return
+        BG_POOL_DIR.mkdir(parents=True, exist_ok=True)
+        saved: list[str] = []
+        skipped: list[str] = []
+        for att in message.attachments:
+            ext = ("." + att.filename.rsplit(".", 1)[-1].lower()) if "." in att.filename else ""
+            if ext not in BG_EXT:
+                skipped.append(f"{att.filename} (формат)")
+                continue
+            if att.size > 10 * 1024 * 1024:
+                skipped.append(f"{att.filename} (>10MB)")
+                continue
+            target = BG_POOL_DIR / f"{message.id}-{att.id}{ext}"
+            try:
+                await att.save(target)
+                saved.append(att.filename)
+            except Exception:
+                log.exception("Failed to save background %s", att.filename)
+                skipped.append(f"{att.filename} (ошибка)")
+        parts = []
+        if saved:
+            parts.append(f"✅ Добавил в пул фонов: {len(saved)}")
+        if skipped:
+            parts.append(f"⏭ Пропустил: {', '.join(skipped)}")
+        if parts:
+            try:
+                await message.reply("\n".join(parts), silent=True)
+            except discord.HTTPException:
+                pass
 
     @bot.event
     async def on_voice_state_update(member: discord.Member, before, after) -> None:
@@ -140,6 +190,19 @@ def build_bot(settings: Settings) -> commands.Bot:
     return bot
 
 
+def _is_sound_track(track: object) -> bool:
+    ident = str(getattr(track, "identifier", "") or "")
+    uri = str(getattr(track, "uri", "") or "")
+    return "/sounds/" in ident or "/sounds/" in uri
+
+
+def _reason_is_replaced(reason: object) -> bool:
+    if reason is None:
+        return False
+    name = getattr(reason, "value", None) or getattr(reason, "name", None) or str(reason)
+    return str(name).lower() == "replaced"
+
+
 def _pick_text_channel(player: wavelink.Player) -> discord.TextChannel | None:
     """Pick a sensible text channel for now-playing messages.
 
@@ -157,6 +220,11 @@ def _pick_text_channel(player: wavelink.Player) -> discord.TextChannel | None:
 async def main() -> None:
     settings = Settings.from_env()
     setup_logging(settings.log_dir, settings.log_level)
+    init_sentry(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=settings.git_sha or None,
+    )
     log.info("Starting Jarvis")
     bot = build_bot(settings)
     async with bot:
