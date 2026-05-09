@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 
 import discord
 import sentry_sdk
@@ -16,6 +17,7 @@ from .db import init_db
 from .errors import JarvisError
 from .logging_setup import setup_logging
 from .observability import init_sentry
+from .persistence import save_player_state
 from .ui.card import BG_EXT, BG_POOL_DIR, build_card_file, pick_background
 from .ui.controls import ControlsView
 
@@ -194,6 +196,11 @@ def build_bot(settings: Settings) -> commands.Bot:
         if member.id != (bot.user.id if bot.user else 0):
             return
         if before.channel is not None and after.channel is None:
+            from .persistence import delete_player_state
+            gp = state.get(member.guild.id)
+            if gp is not None:
+                gp.cancel_position_ticker()
+            await delete_player_state(member.guild.id)
             state.unregister(member.guild.id)
 
     @bot.tree.error
@@ -396,8 +403,45 @@ async def main() -> None:
     )
     log.info("Starting Jarvis")
     bot = build_bot(settings)
+
+    async def _flush_all() -> None:
+        import time as _time
+        for gp in state.all_players():
+            try:
+                row = gp.snapshot(updated_at=int(_time.time()))
+                await save_player_state(row)
+            except Exception:
+                log.exception("Final flush failed for guild")
+
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    def _signal() -> None:
+        log.info("Received shutdown signal — flushing player state")
+        stop_event.set()
+
+    for sig_name in ("SIGTERM", "SIGINT"):
+        try:
+            loop.add_signal_handler(getattr(signal, sig_name), _signal)
+        except (NotImplementedError, AttributeError):
+            # Windows / некоторые рантаймы — не критично, docker SIGTERM на Linux работает.
+            pass
+
     async with bot:
-        await bot.start(settings.discord_token)
+        bot_task = asyncio.create_task(bot.start(settings.discord_token))
+        stop_task = asyncio.create_task(stop_event.wait())
+        done, pending = await asyncio.wait(
+            {bot_task, stop_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if stop_event.is_set():
+            await _flush_all()
+            await bot.close()
+        for t in pending:
+            t.cancel()
+        for t in done:
+            exc = t.exception()
+            if exc is not None and t is bot_task:
+                raise exc
 
 
 if __name__ == "__main__":
