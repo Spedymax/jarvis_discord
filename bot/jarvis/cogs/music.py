@@ -81,6 +81,7 @@ class Music(commands.Cog):
         for t in tracks:
             _remember_requester(gp, t)
         await gp.add_many(tracks)
+        gp.touch_persist()
         await refresh_now_playing(gp)
         if playlist_name and len(tracks) > 1:
             await interaction.followup.send(
@@ -102,6 +103,7 @@ class Music(commands.Cog):
         for t in tracks:
             _remember_requester(gp, t)
         await gp.play_skip_many(tracks)
+        gp.touch_persist()
         if playlist_name and len(tracks) > 1:
             await interaction.followup.send(
                 f"⏭ Плейлист **{playlist_name}** — {len(tracks)} треков, играет первый.",
@@ -122,6 +124,7 @@ class Music(commands.Cog):
         for t in tracks:
             _remember_requester(gp, t)
         await gp.play_next_many(tracks)
+        gp.touch_persist()
         await refresh_now_playing(gp)
         if playlist_name and len(tracks) > 1:
             await interaction.followup.send(
@@ -148,6 +151,7 @@ class Music(commands.Cog):
             raise NotPlayingError()
         gp.loop_mode = "off"
         gp.wl.queue.clear()
+        gp.touch_persist()
         await gp.wl.skip(force=True)
         await interaction.response.send_message("⏹ Остановил.", ephemeral=True)
 

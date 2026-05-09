@@ -102,6 +102,8 @@ def build_bot(settings: Settings) -> commands.Bot:
             if file is None:
                 return
             gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
+            gp.start_position_ticker()
+            gp.touch_persist()
         except Exception:
             sentry_sdk.capture_exception()
             raise
@@ -135,6 +137,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             await gp.handle_track_end(payload.track)
             if not gp.wl.playing and not gp.wl.queue:
                 gp.start_idle_timer()
+                gp.cancel_position_ticker()
         except Exception:
             sentry_sdk.capture_exception()
             raise

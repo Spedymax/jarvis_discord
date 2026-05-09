@@ -26,6 +26,7 @@ class Filters(commands.Cog):
         if gp is None:
             raise NotPlayingError()
         await gp.apply_bassboost(mode)
+        gp.touch_persist()
         await refresh_now_playing(gp)
         await interaction.response.send_message(f"🎚 Bassboost: **{mode}**", ephemeral=True)
 

@@ -64,6 +64,7 @@ class QueueCog(commands.Cog):
         if gp is None:
             raise NotPlayingError()
         gp.loop_mode = mode
+        gp.touch_persist()
         await refresh_now_playing(gp)
         await interaction.response.send_message(f"🔁 Loop: **{mode}**", ephemeral=True)
 
