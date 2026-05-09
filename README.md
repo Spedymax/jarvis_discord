@@ -63,6 +63,7 @@ CI пушит образ в `ghcr.io/spedymax/jarvis_discord:latest` (+ `sha-<7>
        WATCHTOWER_POLL_INTERVAL: "300"
        WATCHTOWER_LABEL_ENABLE: "true"
        WATCHTOWER_CLEANUP: "true"
+       DOCKER_API_VERSION: "1.40"
      networks: [internal]
    ```
 
