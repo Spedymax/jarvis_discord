@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _DB_PATH: Path | None = None
 
@@ -38,6 +38,22 @@ async def init_db(path: Path) -> None:
                 created_at INTEGER NOT NULL,
                 play_count INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (guild_id, name)
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS player_state (
+                guild_id            INTEGER PRIMARY KEY,
+                voice_channel_id    INTEGER NOT NULL,
+                text_channel_id     INTEGER,
+                current_encoded     TEXT,
+                current_position_ms INTEGER NOT NULL DEFAULT 0,
+                current_requester   TEXT,
+                loop_mode           TEXT NOT NULL DEFAULT 'off',
+                bassboost           TEXT NOT NULL DEFAULT 'off',
+                queue_json          TEXT NOT NULL DEFAULT '[]',
+                updated_at          INTEGER NOT NULL
             )
             """
         )
