@@ -17,7 +17,7 @@ def test_scrub_removes_discord_token_from_extra() -> None:
 
 
 def test_scrub_removes_lavalink_password_from_extra() -> None:
-    event = {"extra": {"lavalink_password": "p4ss", "node": "main"}}
+    event = {"extra": {"lavalink_password": "REDACTED-FAKE", "node": "main"}}
     cleaned = _scrub_sensitive(event, {})
     assert "lavalink_password" not in cleaned["extra"]
     assert cleaned["extra"]["node"] == "main"
