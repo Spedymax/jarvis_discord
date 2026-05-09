@@ -5,6 +5,7 @@ import asyncio
 import logging
 
 import discord
+import sentry_sdk
 import wavelink
 from discord.ext import commands
 
@@ -175,13 +176,34 @@ def build_bot(settings: Settings) -> commands.Bot:
         error: discord.app_commands.AppCommandError,
     ) -> None:
         original = getattr(error, "original", error)
-        if isinstance(original, JarvisError):
-            msg = f"❌ {original.user_message}"
-        elif isinstance(original, wavelink.LavalinkLoadException):
-            msg = "❌ Не получилось загрузить трек."
-        else:
-            log.exception("Unhandled command error", exc_info=original)
-            msg = "💥 Что-то поломалось, лог записан."
+
+        with sentry_sdk.push_scope() as scope:
+            scope.set_user({"id": interaction.user.id})
+            cmd = interaction.command
+            scope.set_tag(
+                "command",
+                cmd.qualified_name if cmd is not None else "<unknown>",
+            )
+            if interaction.guild is not None:
+                scope.set_tag("guild_id", str(interaction.guild.id))
+                scope.set_context(
+                    "guild",
+                    {"id": interaction.guild.id, "name": interaction.guild.name},
+                )
+
+            if isinstance(original, JarvisError):
+                msg = f"❌ {original.user_message}"
+                scope.level = "warning"
+                sentry_sdk.capture_exception(original)
+            elif isinstance(original, wavelink.LavalinkLoadException):
+                msg = "❌ Не получилось загрузить трек."
+                # JarvisError → warning, прочее → error (default).
+                sentry_sdk.capture_exception(original)
+            else:
+                log.exception("Unhandled command error", exc_info=original)
+                sentry_sdk.capture_exception(original)
+                msg = "💥 Что-то поломалось, лог записан."
+
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
         else:
