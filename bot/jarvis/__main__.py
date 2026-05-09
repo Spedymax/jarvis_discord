@@ -189,7 +189,7 @@ def build_bot(settings: Settings) -> commands.Bot:
     ) -> None:
         original = getattr(error, "original", error)
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_user({"id": interaction.user.id})
             cmd = interaction.command
             scope.set_tag(
