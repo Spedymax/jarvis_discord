@@ -31,6 +31,7 @@ class GuildPlayer:
     current_track: Any | None = None
     current_background: Any | None = None
     playing_sound: bool = False
+    resuming_after_sound: bool = False
     interrupted_track: Any | None = None
     interrupted_position_ms: int = 0
     sound_interaction: Any | None = None

@@ -93,6 +93,9 @@ def build_bot(settings: Settings) -> commands.Bot:
             gp = state.get(payload.player.guild.id)
             if gp is None:
                 return
+            if gp.resuming_after_sound:
+                gp.resuming_after_sound = False
+                return
             gp.cancel_idle_timer()
             if gp.playing_sound or _is_sound_track(payload.track):
                 return
@@ -146,9 +149,11 @@ def build_bot(settings: Settings) -> commands.Bot:
                         pass
                     gp.sound_interaction = None
                 if saved is not None:
+                    gp.resuming_after_sound = True
                     try:
                         await gp.wl.play(saved, start=pos)
                     except Exception:
+                        gp.resuming_after_sound = False
                         log.exception("Failed to resume after sound")
                 return
             await gp.handle_track_end(payload.track)
