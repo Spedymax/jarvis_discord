@@ -59,17 +59,20 @@ def list_pool() -> list[Path]:
     return sorted(p for p in BG_POOL_DIR.iterdir() if p.suffix.lower() in BG_EXT)
 
 
-_pick_index = 0
+_shuffle_deck: list[Path] = []
 
 
 def pick_background() -> Path:
-    global _pick_index
-    pool = list_pool()
-    if not pool:
-        return BG_DEFAULT
-    chosen = pool[_pick_index % len(pool)]
-    _pick_index += 1
-    return chosen
+    """Pick a background without repeats until the whole pool is exhausted."""
+    global _shuffle_deck
+    if not _shuffle_deck:
+        pool = list_pool()
+        if not pool:
+            return BG_DEFAULT
+        import random
+        _shuffle_deck = pool[:]
+        random.shuffle(_shuffle_deck)
+    return _shuffle_deck.pop()
 
 
 def _fit_cover(img: Image.Image, w: int, h: int) -> Image.Image:
