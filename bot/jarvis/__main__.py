@@ -66,66 +66,78 @@ def build_bot(settings: Settings) -> commands.Bot:
 
     @bot.event
     async def on_wavelink_node_ready(payload: wavelink.NodeReadyEventPayload) -> None:
-        log.info("Lavalink node ready: %s", payload.node.identifier)
+        try:
+            log.info("Lavalink node ready: %s", payload.node.identifier)
+        except Exception:
+            sentry_sdk.capture_exception()
+            raise
 
     @bot.event
     async def on_wavelink_track_start(payload: wavelink.TrackStartEventPayload) -> None:
-        gp = state.get(payload.player.guild.id)
-        if gp is None:
-            return
-        gp.cancel_idle_timer()
-        if gp.playing_sound or _is_sound_track(payload.track):
-            return
-        track = payload.track
-        if not getattr(track, "requester_name", None):
-            remembered = gp.requesters.get(getattr(track, "identifier", ""), None)
-            if remembered:
-                track.requester_name = remembered
-        gp.current_track = track
-        gp.current_background = pick_background()
-        view = ControlsView(gp)
-        if gp.nowplaying_msg is not None:
-            try:
-                await gp.nowplaying_msg.delete()
-            except Exception:
-                pass
-            gp.nowplaying_msg = None
-        text_channel = gp.text_channel or _pick_text_channel(payload.player)
-        if text_channel is None:
-            return
-        file = build_card_file(gp)
-        if file is None:
-            return
-        gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
+        try:
+            gp = state.get(payload.player.guild.id)
+            if gp is None:
+                return
+            gp.cancel_idle_timer()
+            if gp.playing_sound or _is_sound_track(payload.track):
+                return
+            track = payload.track
+            if not getattr(track, "requester_name", None):
+                remembered = gp.requesters.get(getattr(track, "identifier", ""), None)
+                if remembered:
+                    track.requester_name = remembered
+            gp.current_track = track
+            gp.current_background = pick_background()
+            view = ControlsView(gp)
+            if gp.nowplaying_msg is not None:
+                try:
+                    await gp.nowplaying_msg.delete()
+                except Exception:
+                    pass
+                gp.nowplaying_msg = None
+            text_channel = gp.text_channel or _pick_text_channel(payload.player)
+            if text_channel is None:
+                return
+            file = build_card_file(gp)
+            if file is None:
+                return
+            gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
+        except Exception:
+            sentry_sdk.capture_exception()
+            raise
 
     @bot.event
     async def on_wavelink_track_end(payload: wavelink.TrackEndEventPayload) -> None:
-        gp = state.get(payload.player.guild.id)
-        if gp is None:
-            return
-        if _reason_is_replaced(getattr(payload, "reason", None)):
-            return
-        if gp.playing_sound:
-            gp.playing_sound = False
-            saved = gp.interrupted_track
-            pos = gp.interrupted_position_ms
-            gp.interrupted_track = None
-            gp.interrupted_position_ms = 0
-            if gp.sound_interaction is not None:
-                try:
-                    await gp.sound_interaction.delete_original_response()
-                except Exception:
-                    pass
-                gp.sound_interaction = None
-            if saved is not None:
-                try:
-                    await gp.wl.play(saved, start=pos)
-                except Exception:
-                    log.exception("Failed to resume after sound")
-            return
-        await gp.handle_track_end(payload.track)
-        if not gp.wl.playing and not gp.wl.queue:
-            gp.start_idle_timer()
+        try:
+            gp = state.get(payload.player.guild.id)
+            if gp is None:
+                return
+            if _reason_is_replaced(getattr(payload, "reason", None)):
+                return
+            if gp.playing_sound:
+                gp.playing_sound = False
+                saved = gp.interrupted_track
+                pos = gp.interrupted_position_ms
+                gp.interrupted_track = None
+                gp.interrupted_position_ms = 0
+                if gp.sound_interaction is not None:
+                    try:
+                        await gp.sound_interaction.delete_original_response()
+                    except Exception:
+                        pass
+                    gp.sound_interaction = None
+                if saved is not None:
+                    try:
+                        await gp.wl.play(saved, start=pos)
+                    except Exception:
+                        log.exception("Failed to resume after sound")
+                return
+            await gp.handle_track_end(payload.track)
+            if not gp.wl.playing and not gp.wl.queue:
+                gp.start_idle_timer()
+        except Exception:
+            sentry_sdk.capture_exception()
+            raise
 
     @bot.event
     async def on_message(message: discord.Message) -> None:
