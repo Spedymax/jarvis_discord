@@ -155,6 +155,9 @@ def build_bot(settings: Settings) -> commands.Bot:
                     except Exception:
                         gp.resuming_after_sound = False
                         log.exception("Failed to resume after sound")
+                    return
+                # No music to resume — start idle timer so bot eventually leaves.
+                gp.start_idle_timer()
                 return
             await gp.handle_track_end(payload.track)
             if not gp.wl.playing and not gp.wl.queue:
@@ -201,16 +204,30 @@ def build_bot(settings: Settings) -> commands.Bot:
 
     @bot.event
     async def on_voice_state_update(member: discord.Member, before, after) -> None:
-        # Bot got disconnected — clean up state
-        if member.id != (bot.user.id if bot.user else 0):
+        bot_id = bot.user.id if bot.user else 0
+
+        # Bot got disconnected externally — clean up state.
+        if member.id == bot_id:
+            if before.channel is not None and after.channel is None:
+                from .persistence import delete_player_state
+                gp = state.get(member.guild.id)
+                if gp is not None:
+                    gp.cancel_position_ticker()
+                await delete_player_state(member.guild.id)
+                state.unregister(member.guild.id)
             return
-        if before.channel is not None and after.channel is None:
-            from .persistence import delete_player_state
+
+        # A human left a channel — check if bot is now alone.
+        if before.channel is None:
+            return
+        bot_member = before.channel.guild.me
+        if bot_member not in before.channel.members:
+            return
+        humans = [m for m in before.channel.members if not m.bot]
+        if not humans:
             gp = state.get(member.guild.id)
             if gp is not None:
-                gp.cancel_position_ticker()
-            await delete_player_state(member.guild.id)
-            state.unregister(member.guild.id)
+                gp.start_idle_timer()
 
     @bot.tree.error
     async def on_app_command_error(
