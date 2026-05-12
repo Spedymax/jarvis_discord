@@ -23,6 +23,7 @@ class PlayerStateRow:
     current_requester: str | None
     loop_mode: str
     bassboost: str
+    effect: str
     queue_json: str
     updated_at: int
 
@@ -34,8 +35,8 @@ async def save_player_state(row: PlayerStateRow) -> None:
             INSERT OR REPLACE INTO player_state (
                 guild_id, voice_channel_id, text_channel_id,
                 current_encoded, current_position_ms, current_requester,
-                loop_mode, bassboost, queue_json, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                loop_mode, bassboost, effect, queue_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row.guild_id,
@@ -46,6 +47,7 @@ async def save_player_state(row: PlayerStateRow) -> None:
                 row.current_requester,
                 row.loop_mode,
                 row.bassboost,
+                row.effect,
                 row.queue_json,
                 row.updated_at,
             ),
@@ -66,7 +68,7 @@ async def load_all() -> list[PlayerStateRow]:
             """
             SELECT guild_id, voice_channel_id, text_channel_id,
                    current_encoded, current_position_ms, current_requester,
-                   loop_mode, bassboost, queue_json, updated_at
+                   loop_mode, bassboost, effect, queue_json, updated_at
             FROM player_state
             ORDER BY guild_id ASC
             """

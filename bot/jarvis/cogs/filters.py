@@ -1,4 +1,4 @@
-"""Audio filters: /bassboost."""
+"""Audio filters: /bassboost, /effect."""
 from __future__ import annotations
 
 from typing import Literal
@@ -10,6 +10,13 @@ from discord.ext import commands
 from .. import state
 from ..errors import NotPlayingError
 from ..ui.card import refresh_now_playing
+
+_EFFECT_LABELS = {
+    "off":       "выкл",
+    "8d":        "8D (вращение)",
+    "nightcore": "Nightcore (быстрее + выше)",
+    "vaporwave": "Vaporwave (медленнее + ниже)",
+}
 
 
 class Filters(commands.Cog):
@@ -29,6 +36,21 @@ class Filters(commands.Cog):
         gp.touch_persist()
         await refresh_now_playing(gp)
         await interaction.response.send_message(f"🎚 Bassboost: **{mode}**", ephemeral=True)
+
+    @app_commands.command(description="Аудио-эффект: off / 8d / nightcore / vaporwave.")
+    async def effect(
+        self,
+        interaction: discord.Interaction,
+        mode: Literal["off", "8d", "nightcore", "vaporwave"],
+    ) -> None:
+        gp = state.get(interaction.guild_id)  # type: ignore[arg-type]
+        if gp is None:
+            raise NotPlayingError()
+        await gp.apply_effect(mode)
+        gp.touch_persist()
+        await refresh_now_playing(gp)
+        label = _EFFECT_LABELS.get(mode, mode)
+        await interaction.response.send_message(f"✨ Эффект: **{label}**", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -1,7 +1,7 @@
-"""Equalizer presets for /bassboost. Lavalink expects 15 bands in [-0.25, 1.0]."""
+"""Equalizer presets and audio effect configs for Lavalink filters."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 BassboostMode = Literal["off", "low", "medium", "high"]
 
@@ -18,3 +18,16 @@ BASSBOOST_CYCLE: tuple[BassboostMode, ...] = ("off", "low", "medium", "high")
 def next_bassboost(current: BassboostMode) -> BassboostMode:
     idx = BASSBOOST_CYCLE.index(current)
     return BASSBOOST_CYCLE[(idx + 1) % len(BASSBOOST_CYCLE)]
+
+
+EffectMode = Literal["off", "8d", "nightcore", "vaporwave"]
+
+# Each entry maps to kwargs for the corresponding wavelink filter sub-object.
+# "rotation" → filters.rotation.set(**v)
+# "timescale" → filters.timescale.set(**v)
+EFFECT_CONFIGS: dict[str, dict[str, Any]] = {
+    "off":       {},
+    "8d":        {"rotation": {"rotation_hz": 0.2}},
+    "nightcore": {"timescale": {"pitch": 1.2, "speed": 1.1, "rate": 1.0}},
+    "vaporwave": {"timescale": {"pitch": 0.8, "speed": 0.85, "rate": 1.0}},
+}

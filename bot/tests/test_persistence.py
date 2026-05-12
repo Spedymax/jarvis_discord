@@ -33,6 +33,7 @@ async def test_save_and_load_single_row(db: Path) -> None:
         current_requester="alice",
         loop_mode="track",
         bassboost="strong",
+        effect="8d",
         queue_json=json.dumps([{"encoded": "def==", "requester": "bob"}]),
         updated_at=1715000000,
     )
@@ -54,6 +55,7 @@ async def test_save_replaces_existing_for_same_guild(db: Path) -> None:
         current_requester=None,
         loop_mode="off",
         bassboost="off",
+        effect="off",
         queue_json="[]",
         updated_at=1,
     )
@@ -77,6 +79,7 @@ async def test_delete_removes_row(db: Path) -> None:
         current_requester=None,
         loop_mode="off",
         bassboost="off",
+        effect="off",
         queue_json="[]",
         updated_at=0,
     )
@@ -105,6 +108,7 @@ async def test_load_all_returns_multiple_rows_sorted_by_guild_id(db: Path) -> No
                 current_requester=None,
                 loop_mode="off",
                 bassboost="off",
+                effect="off",
                 queue_json="[]",
                 updated_at=0,
             )

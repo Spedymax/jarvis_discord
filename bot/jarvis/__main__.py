@@ -358,17 +358,17 @@ async def restore_players(bot: commands.Bot) -> None:
             await delete_player_state(row.guild_id)
             continue
 
-        gp = GuildPlayer(wl=player, loop_mode=row.loop_mode, bassboost=row.bassboost)  # type: ignore[arg-type]
+        gp = GuildPlayer(wl=player, loop_mode=row.loop_mode, bassboost=row.bassboost, effect=row.effect)  # type: ignore[arg-type]
         if isinstance(row.text_channel_id, int):
             tc = guild.get_channel(row.text_channel_id)
             if isinstance(tc, discord.TextChannel):
                 gp.text_channel = tc
 
-        if row.bassboost != "off":
+        if row.bassboost != "off" or row.effect != "off":
             try:
-                await gp.apply_bassboost(row.bassboost)  # type: ignore[arg-type]
+                await gp._rebuild_filters()
             except Exception:
-                log.exception("Failed to apply bassboost on restore")
+                log.exception("Failed to apply filters on restore")
                 sentry_sdk.capture_exception()
 
         # Hydrate queue

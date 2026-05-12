@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _DB_PATH: Path | None = None
 
@@ -60,6 +60,12 @@ async def init_db(path: Path) -> None:
         try:
             await conn.execute(
                 "ALTER TABLE sounds ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0"
+            )
+        except aiosqlite.OperationalError:
+            pass  # column already exists
+        try:
+            await conn.execute(
+                "ALTER TABLE player_state ADD COLUMN effect TEXT NOT NULL DEFAULT 'off'"
             )
         except aiosqlite.OperationalError:
             pass  # column already exists

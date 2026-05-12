@@ -10,7 +10,7 @@ from typing import Any, ClassVar, Literal
 
 import discord
 
-from .filters_presets import BASSBOOST_BANDS, BassboostMode
+from .filters_presets import BASSBOOST_BANDS, EFFECT_CONFIGS, BassboostMode, EffectMode
 from .persistence import PlayerStateRow, save_player_state
 
 LoopMode = Literal["off", "track", "queue"]
@@ -25,6 +25,7 @@ class GuildPlayer:
     wl: Any  # wavelink.Player or test mock
     loop_mode: LoopMode = "off"
     bassboost: BassboostMode = "off"
+    effect: EffectMode = "off"
     nowplaying_msg: discord.Message | None = None
     text_channel: discord.abc.Messageable | None = None
     requesters: dict[str, str] = field(default_factory=dict)
@@ -140,19 +141,31 @@ class GuildPlayer:
                 pass
             self.nowplaying_msg = None
 
-    async def apply_bassboost(self, mode: BassboostMode) -> None:
-        self.bassboost = mode
+    async def _rebuild_filters(self) -> None:
+        """Apply current bassboost EQ + effect as a single Lavalink filter update."""
         try:
             import wavelink
             filters = wavelink.Filters()
             filters.equalizer.set(bands=[
                 {"band": i, "gain": g}
-                for i, g in enumerate(BASSBOOST_BANDS[mode])
+                for i, g in enumerate(BASSBOOST_BANDS[self.bassboost])
             ])
+            cfg = EFFECT_CONFIGS.get(self.effect, {})
+            if "rotation" in cfg:
+                filters.rotation.set(**cfg["rotation"])
+            if "timescale" in cfg:
+                filters.timescale.set(**cfg["timescale"])
             await self.wl.set_filters(filters)
         except ImportError:
-            # Tests run without wavelink importable in the path; pass raw bands
-            await self.wl.set_filters(BASSBOOST_BANDS[mode])
+            await self.wl.set_filters(BASSBOOST_BANDS[self.bassboost])
+
+    async def apply_bassboost(self, mode: BassboostMode) -> None:
+        self.bassboost = mode
+        await self._rebuild_filters()
+
+    async def apply_effect(self, mode: EffectMode) -> None:
+        self.effect = mode
+        await self._rebuild_filters()
 
     def snapshot(self, *, updated_at: int) -> PlayerStateRow:
         """Serialize current player state into a PlayerStateRow."""
@@ -192,6 +205,7 @@ class GuildPlayer:
             current_requester=current_requester,
             loop_mode=self.loop_mode,
             bassboost=self.bassboost,
+            effect=self.effect,
             queue_json=_json.dumps(queue_payload),
             updated_at=updated_at,
         )
