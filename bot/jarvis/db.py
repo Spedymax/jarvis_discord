@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _DB_PATH: Path | None = None
 
@@ -69,6 +69,12 @@ async def init_db(path: Path) -> None:
             )
         except aiosqlite.OperationalError:
             pass  # column already exists
+        try:
+            await conn.execute(
+                "ALTER TABLE sounds ADD COLUMN volume INTEGER NOT NULL DEFAULT 100"
+            )
+        except aiosqlite.OperationalError:
+            pass  # column already exists
         await conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (SCHEMA_VERSION,),
@@ -86,6 +92,7 @@ class Sound:
     owner_id: int
     created_at: int
     play_count: int = 0
+    volume: int = 100
 
 
 async def add_sound(
@@ -127,6 +134,15 @@ async def increment_play_count(sound_id: int) -> None:
         await conn.execute(
             "UPDATE sounds SET play_count = play_count + 1 WHERE id = ?",
             (sound_id,),
+        )
+        await conn.commit()
+
+
+async def set_sound_volume(sound_id: int, volume: int) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute(
+            "UPDATE sounds SET volume = ? WHERE id = ?",
+            (volume, sound_id),
         )
         await conn.commit()
 

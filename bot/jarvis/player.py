@@ -36,6 +36,7 @@ class GuildPlayer:
     interrupted_track: Any | None = None
     interrupted_position_ms: int = 0
     sound_interaction: Any | None = None
+    original_volume: int = 100
     idle_task: asyncio.Task[None] | None = field(default=None, repr=False)
     persist_task: asyncio.Task[None] | None = field(default=None, repr=False)
     position_ticker_task: asyncio.Task[None] | None = field(default=None, repr=False)

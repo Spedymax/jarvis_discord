@@ -142,6 +142,10 @@ def build_bot(settings: Settings) -> commands.Bot:
                 pos = gp.interrupted_position_ms
                 gp.interrupted_track = None
                 gp.interrupted_position_ms = 0
+                try:
+                    await gp.wl.set_volume(int(gp.original_volume))
+                except Exception:
+                    log.exception("Failed to restore volume after sound")
                 if gp.sound_interaction is not None:
                     try:
                         await gp.sound_interaction.delete_original_response()

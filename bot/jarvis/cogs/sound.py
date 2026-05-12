@@ -26,6 +26,7 @@ from ..errors import (
 from ..player import GuildPlayer
 from ..sources import SourceKind, classify_query
 from ..ui.soundboard import SoundboardView, build_panel_embed
+from ..ui.sound_settings import VolumeView
 
 log = logging.getLogger(__name__)
 
@@ -305,11 +306,17 @@ async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> N
         return
     track.requester_name = getattr(interaction.user, "display_name", "—")
 
-    if gp.wl.playing and not gp.playing_sound:
-        gp.interrupted_track = gp.current_track
-        gp.interrupted_position_ms = int(getattr(gp.wl, "position", 0) or 0)
+    if not gp.playing_sound:
+        gp.original_volume = int(getattr(gp.wl, "volume", 100) or 100)
+        if gp.wl.playing:
+            gp.interrupted_track = gp.current_track
+            gp.interrupted_position_ms = int(getattr(gp.wl, "position", 0) or 0)
     gp.playing_sound = True
     gp.cancel_idle_timer()
+    try:
+        await gp.wl.set_volume(int(sound.volume))
+    except Exception:
+        log.exception("Failed to set sound volume")
     await gp.wl.play(track)
     await db.increment_play_count(sound.id)
 
@@ -457,6 +464,31 @@ class SoundCog(commands.Cog):
 
     @rename_cmd.autocomplete("old")
     async def _rename_old_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ):
+        sounds = await db.list_sounds(interaction.guild_id)  # type: ignore[arg-type]
+        c = current.lower()
+        return [
+            app_commands.Choice(name=s.name, value=s.name)
+            for s in sounds
+            if c in s.name.lower()
+        ][:25]
+
+    @sound.command(name="settings", description="Настроить громкость конкретного звука.")
+    @app_commands.describe(name="Имя звука")
+    async def settings_cmd(self, interaction: discord.Interaction, name: str) -> None:
+        cleaned = _validate_name(name)
+        sound = await db.get_sound(interaction.guild_id, cleaned)  # type: ignore[arg-type]
+        if sound is None:
+            raise SoundError(f"Нет такого: `{cleaned}`")
+        await interaction.response.send_message(
+            f"🎚 `{sound.name}` — текущая громкость **{sound.volume}%**",
+            view=VolumeView(sound),
+            ephemeral=True,
+        )
+
+    @settings_cmd.autocomplete("name")
+    async def _settings_autocomplete(
         self, interaction: discord.Interaction, current: str
     ):
         sounds = await db.list_sounds(interaction.guild_id)  # type: ignore[arg-type]
