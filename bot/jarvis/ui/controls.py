@@ -41,10 +41,11 @@ class _BassSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         mode: BassboostMode = self.values[0]  # type: ignore[assignment]
         await self.gp.apply_bassboost(mode)
         await refresh_now_playing(self.gp)
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             content=f"🎚 Bass: **{mode}**", view=None
         )
 

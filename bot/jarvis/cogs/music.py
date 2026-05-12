@@ -27,7 +27,10 @@ async def _resolve_tracks(
     query: str, requester: discord.abc.User
 ) -> tuple[list[wavelink.Playable], str | None]:
     lavalink_query = to_lavalink_query(query)
-    results = await wavelink.Playable.search(lavalink_query)
+    try:
+        results = await wavelink.Playable.search(lavalink_query)
+    except wavelink.LavalinkLoadException:
+        raise TrackNotFoundError()
     if not results:
         raise TrackNotFoundError()
     name = getattr(requester, "display_name", str(requester))
