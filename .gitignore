@@ -27,4 +27,5 @@ lavalink/plugins/*.jar
 **/.omc/
 
 # Personal notes (Claude scratchpad)
-NOTES.mdCLAUDE.md
+NOTES.md
+CLAUDE.md
