@@ -18,6 +18,7 @@ plugins:
       countryCode: "US"
       playlistLoadLimit: 100
       albumLoadLimit: 100
+      preferAnonymousToken: false
 
   youtube:
     enabled: true
