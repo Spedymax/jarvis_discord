@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _DB_PATH: Path | None = None
 
@@ -54,6 +54,24 @@ async def init_db(path: Path) -> None:
                 bassboost           TEXT NOT NULL DEFAULT 'off',
                 queue_json          TEXT NOT NULL DEFAULT '[]',
                 updated_at          INTEGER NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hotkey_tokens (
+                token      TEXT PRIMARY KEY,
+                user_id    INTEGER NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guild_settings (
+                guild_id           INTEGER PRIMARY KEY,
+                hotkey_channel_id  INTEGER,
+                hotkey_webhook_url TEXT
             )
             """
         )
@@ -186,3 +204,56 @@ async def delete_sound(guild_id: int, name: str) -> Optional[Sound]:
         await conn.execute("DELETE FROM sounds WHERE id = ?", (sound.id,))
         await conn.commit()
     return sound
+
+
+async def upsert_hotkey_token(token: str, user_id: int, created_at: int) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        # один активный токен на юзера: убрать старый, затем вставить новый
+        await conn.execute("DELETE FROM hotkey_tokens WHERE user_id = ?", (user_id,))
+        await conn.execute(
+            "INSERT INTO hotkey_tokens (token, user_id, created_at) VALUES (?, ?, ?)",
+            (token, user_id, created_at),
+        )
+        await conn.commit()
+
+
+async def get_user_id_by_token(token: str) -> Optional[int]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            "SELECT user_id FROM hotkey_tokens WHERE token = ?", (token,)
+        )
+        row = await cur.fetchone()
+        return int(row[0]) if row else None
+
+
+async def revoke_hotkey_token(user_id: int) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute("DELETE FROM hotkey_tokens WHERE user_id = ?", (user_id,))
+        await conn.commit()
+
+
+async def set_hotkey_channel(guild_id: int, channel_id: int, webhook_url: str) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute(
+            """
+            INSERT INTO guild_settings (guild_id, hotkey_channel_id, hotkey_webhook_url)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                hotkey_channel_id = excluded.hotkey_channel_id,
+                hotkey_webhook_url = excluded.hotkey_webhook_url
+            """,
+            (guild_id, channel_id, webhook_url),
+        )
+        await conn.commit()
+
+
+async def get_hotkey_settings(guild_id: int) -> Optional[tuple[int, str]]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            "SELECT hotkey_channel_id, hotkey_webhook_url FROM guild_settings WHERE guild_id = ?",
+            (guild_id,),
+        )
+        row = await cur.fetchone()
+        if row is None or row[0] is None or row[1] is None:
+            return None
+        return int(row[0]), str(row[1])
