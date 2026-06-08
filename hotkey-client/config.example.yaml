@@ -1,0 +1,10 @@
+# Скопируй в config.yaml и заполни значениями из /hotkey setup
+token: "ВСТАВЬ_ТОКЕН"
+webhook_url: "ВСТАВЬ_WEBHOOK_URL"
+
+# Комбинации: модификаторы <ctrl>/<alt>/<shift>/<cmd> + клавиша.
+# Значение — имя звука как в /sound list (lowercase, без пробелов).
+bindings:
+  "<f13>": "жыр"
+  "<ctrl>+<alt>+1": "лол"
+  "<ctrl>+<shift>+f14": "сос"
