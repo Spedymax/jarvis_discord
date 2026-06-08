@@ -45,6 +45,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             "jarvis.cogs.queue",
             "jarvis.cogs.filters",
             "jarvis.cogs.sound",
+            "jarvis.cogs.hotkeys",
         ):
             await bot.load_extension(ext)
 
