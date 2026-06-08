@@ -284,27 +284,43 @@ async def _ensure_voice(interaction: discord.Interaction) -> GuildPlayer:
     return gp
 
 
-async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> None:
-    """Entry point used by both slash and Soundboard view."""
-    sound = await db.get_sound_by_id(sound_id)
-    if sound is None:
-        await interaction.response.send_message("❌ Звук не найден.", ephemeral=True)
-        return
+async def _ensure_voice_for_member(member: discord.Member) -> GuildPlayer | None:
+    """Find/connect a GuildPlayer for a member's current voice channel.
 
-    try:
-        gp = await _ensure_voice(interaction)
-    except JarvisError as e:
-        await interaction.response.send_message(f"❌ {e.user_message}", ephemeral=True)
-        return
+    No interaction. Returns None if the member is not in voice, or the bot is
+    busy in a different channel.
+    """
+    voice = getattr(member, "voice", None)
+    if voice is None or voice.channel is None:
+        return None
 
+    gp = state.get(member.guild.id)
+    if gp is not None:
+        if gp.wl.channel.id != voice.channel.id:
+            return None  # bot busy elsewhere
+        return gp
+
+    wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
+    wl_player.autoplay = wavelink.AutoPlayMode.partial
+    gp = GuildPlayer(wl=wl_player, text_channel=None)
+    state.register(member.guild.id, gp)
+    return gp
+
+
+async def play_sound_core(
+    gp: GuildPlayer,
+    sound: db.Sound,
+    requester_name: str,
+) -> bool:
+    """Play a sound on an existing GuildPlayer without any interaction.
+
+    Reuses the interrupt/resume music logic via on_wavelink_track_end.
+    Returns True if playback started, False if the file could not be loaded.
+    """
     track = await _search_local(Path(sound.file_path))
     if track is None:
-        await interaction.response.send_message(
-            "❌ Файл недоступен — возможно, удалён.",
-            ephemeral=True,
-        )
-        return
-    track.requester_name = getattr(interaction.user, "display_name", "—")
+        return False
+    track.requester_name = requester_name
 
     if not gp.playing_sound:
         gp.original_volume = int(getattr(gp.wl, "volume", 100) or 100)
@@ -319,6 +335,30 @@ async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> N
         log.exception("Failed to set sound volume")
     await gp.wl.play(track)
     await db.increment_play_count(sound.id)
+    return True
+
+
+async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> None:
+    """Entry point used by both slash and Soundboard view."""
+    sound = await db.get_sound_by_id(sound_id)
+    if sound is None:
+        await interaction.response.send_message("❌ Звук не найден.", ephemeral=True)
+        return
+
+    try:
+        gp = await _ensure_voice(interaction)
+    except JarvisError as e:
+        await interaction.response.send_message(f"❌ {e.user_message}", ephemeral=True)
+        return
+
+    requester_name = getattr(interaction.user, "display_name", "—")
+    ok = await play_sound_core(gp, sound, requester_name)
+    if not ok:
+        await interaction.response.send_message(
+            "❌ Файл недоступен — возможно, удалён.",
+            ephemeral=True,
+        )
+        return
 
     if not interaction.response.is_done():
         await interaction.response.send_message(
