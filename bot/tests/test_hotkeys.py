@@ -29,7 +29,7 @@ def test_parse_payload_empty_sound_returns_none() -> None:
     assert hotkeys.parse_payload("tokenonly ") is None
 
 
-def test_parse_payload_strips_zero_width_noise() -> None:
+def test_parse_payload_rest_becomes_sound() -> None:
     # split по первому пробелу: всё после первого пробела идёт в sound
     token, sound = hotkeys.parse_payload("tok hello world")
     assert token == "tok"

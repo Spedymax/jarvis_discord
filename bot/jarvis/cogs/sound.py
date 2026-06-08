@@ -284,7 +284,7 @@ async def _ensure_voice(interaction: discord.Interaction) -> GuildPlayer:
     return gp
 
 
-async def _ensure_voice_for_member(member: discord.Member) -> GuildPlayer | None:
+async def ensure_voice_for_member(member: discord.Member) -> GuildPlayer | None:
     """Find/connect a GuildPlayer for a member's current voice channel.
 
     No interaction. Returns None if the member is not in voice, or the bot is

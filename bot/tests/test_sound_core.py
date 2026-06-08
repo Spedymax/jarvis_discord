@@ -70,7 +70,7 @@ async def test_ensure_voice_member_not_in_voice() -> None:
     from jarvis.cogs import sound as sm
     member = MagicMock()
     member.voice = None
-    assert await sm._ensure_voice_for_member(member) is None
+    assert await sm.ensure_voice_for_member(member) is None
 
 
 @pytest.mark.asyncio
@@ -82,7 +82,7 @@ async def test_ensure_voice_member_bot_busy_elsewhere(monkeypatch, fake_player) 
     member.voice.channel.id = 111
     existing = GuildPlayer(wl=fake_player)  # fake_player.channel.id == 1234567890
     monkeypatch.setattr(state, "get", lambda gid: existing)
-    assert await sm._ensure_voice_for_member(member) is None
+    assert await sm.ensure_voice_for_member(member) is None
 
 
 @pytest.mark.asyncio
@@ -94,4 +94,4 @@ async def test_ensure_voice_member_reuses_same_channel(monkeypatch, fake_player)
     member.voice.channel.id = 1234567890  # matches fake_player.channel.id
     existing = GuildPlayer(wl=fake_player)
     monkeypatch.setattr(state, "get", lambda gid: existing)
-    assert await sm._ensure_voice_for_member(member) is existing
+    assert await sm.ensure_voice_for_member(member) is existing

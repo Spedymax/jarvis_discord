@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from .. import db, state
 from ..hotkeys import TOKEN_NBYTES, Throttle, find_member_in_voice, parse_payload
-from .sound import play_sound_core, _ensure_voice_for_member
+from .sound import play_sound_core, ensure_voice_for_member
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +95,9 @@ class HotkeysCog(commands.Cog):
 
     @commands.Cog.listener("on_message")
     async def on_hotkey_message(self, message: discord.Message) -> None:
+        # The webhook_id gate is the authoritative anti-injection guard: a normal
+        # member message (even one that can see this channel) has no webhook_id,
+        # so it is ignored regardless of channel view permissions.
         if message.webhook_id is None or message.guild is None:
             return
         settings = await db.get_hotkey_settings(message.guild.id)
@@ -118,7 +121,7 @@ class HotkeysCog(commands.Cog):
             sound = await db.get_sound(member.guild.id, sound_name.strip().lower())
             if sound is None:
                 return
-            gp = await _ensure_voice_for_member(member)
+            gp = await ensure_voice_for_member(member)
             if gp is None:
                 return
             await play_sound_core(gp, sound, getattr(member, "display_name", "—"))
