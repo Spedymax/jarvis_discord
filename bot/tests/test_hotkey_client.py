@@ -7,6 +7,7 @@ Windows; CI just shouldn't break on its absence.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,10 +21,13 @@ CLIENT_PATH = Path(__file__).resolve().parents[2] / "hotkey-client" / "client.py
 def _load_client():
     spec = importlib.util.spec_from_file_location("hotkey_client", CLIENT_PATH)
     mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(CLIENT_PATH.parent))  # client.py импортирует setup_core по соседству
     try:
         spec.loader.exec_module(mod)
     except Exception as exc:  # e.g. pynput backend needs a display
         pytest.skip(f"client import failed: {exc}")
+    finally:
+        sys.path.remove(str(CLIENT_PATH.parent))
     return mod
 
 
