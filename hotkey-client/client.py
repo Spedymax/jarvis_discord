@@ -5,6 +5,10 @@ Discord webhook with '<token> <sound>' in the username field on each press.
 
 First run (or missing/invalid config.yaml) opens a GUI setup wizard.
 Pass --setup to force the wizard even when config is valid.
+
+After startup the client lives as a tray icon (меню: «Биндинги…»,
+«Запускать с Windows», «Выход»). Logs are written to hotkey-client.log
+next to the exe.
 """
 from __future__ import annotations
 
@@ -167,6 +171,35 @@ class HotkeyManager:
             self._stop_locked()
 
 
+_settings_lock = threading.Lock()
+
+
+def open_settings(manager: HotkeyManager) -> None:
+    """Открыть GUI биндингов из трея; повторный клик при открытом окне — игнор."""
+    if not _settings_lock.acquire(blocking=False):
+        return
+    try:
+        from setup_gui import run_setup_gui
+
+        try:
+            current = load_config()
+        except ConfigError:
+            current = None
+        result = run_setup_gui(initial=current)
+        if result is None:
+            return
+        try:
+            validate_config(result)
+        except ConfigError as exc:
+            log.error("Конфиг из визарда не прошёл валидацию: %s", exc)
+            return
+        save_config(result)
+        manager.reload(result)
+        log.info("Конфиг сохранён и применён: %s", config_path())
+    finally:
+        _settings_lock.release()
+
+
 def main() -> int:
     setup_logging()
     force_setup = "--setup" in sys.argv
@@ -197,10 +230,11 @@ def main() -> int:
 
     manager = HotkeyManager()
     manager.start(cfg)
-    log.info("Ctrl+C для выхода.")
+
+    import tray  # lazy: pystray/Pillow только в рантайме
+
     try:
-        while True:
-            time.sleep(3600)
+        tray.run_tray(on_settings=lambda: open_settings(manager), on_quit=manager.stop)
     except KeyboardInterrupt:
         manager.stop()
     return 0
