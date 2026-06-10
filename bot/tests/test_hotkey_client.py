@@ -57,3 +57,10 @@ def test_validate_config_bad_combo() -> None:
             {"token": "t", "webhook_url": "x", "bindings": {"ctrl+1": "a"}}
         )
         # missing <> brackets -> pynput parse fails
+
+
+def test_config_path_next_to_script() -> None:
+    client = _load_client()
+    p = client.config_path()
+    assert p.name == "config.yaml"
+    assert p.parent == CLIENT_PATH.parent

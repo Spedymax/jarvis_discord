@@ -2,6 +2,9 @@
 
 Reads config.yaml next to this script, registers global hotkeys, and POSTs a
 Discord webhook with '<token> <sound>' in the username field on each press.
+
+First run (or missing/invalid config.yaml) opens a GUI setup wizard.
+Pass --setup to force the wizard even when config is valid.
 """
 from __future__ import annotations
 
@@ -43,14 +46,26 @@ def validate_config(cfg: dict) -> None:
         seen.add(combo)
 
 
+def config_path() -> Path:
+    """Рядом с .exe (PyInstaller onefile) или рядом со скриптом."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "config.yaml"
+    return Path(__file__).resolve().parent / "config.yaml"
+
+
 def load_config() -> dict:
-    path = Path(__file__).resolve().parent / "config.yaml"
+    path = config_path()
     if not path.exists():
         raise ConfigError("нет config.yaml рядом со скриптом (скопируй config.example.yaml)")
     with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
     validate_config(cfg)
     return cfg
+
+
+def save_config(cfg: dict) -> None:
+    with open(config_path(), "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
 
 
 def _send(webhook_url: str, token: str, sound: str) -> None:
@@ -65,13 +80,7 @@ def _send(webhook_url: str, token: str, sound: str) -> None:
         print(f"→ {sound} (ошибка сети: {exc})")
 
 
-def main() -> int:
-    try:
-        cfg = load_config()
-    except ConfigError as exc:
-        print(f"❌ {exc}")
-        return 1
-
+def run_client(cfg: dict) -> int:
     token = cfg["token"]
     webhook_url = cfg["webhook_url"]
     last_fire: dict[str, float] = {}
@@ -95,6 +104,34 @@ def main() -> int:
         except KeyboardInterrupt:
             print("\nВыход.")
     return 0
+
+
+def main() -> int:
+    force_setup = "--setup" in sys.argv
+
+    cfg: dict | None = None
+    try:
+        cfg = load_config()
+    except ConfigError:
+        cfg = None
+
+    if cfg is None or force_setup:
+        from setup_gui import run_setup_gui  # lazy: tkinter только для визарда
+
+        result = run_setup_gui(initial=cfg)
+        if result is None:
+            print("Настройка отменена.")
+            return 1
+        try:
+            validate_config(result)
+        except ConfigError as exc:
+            print(f"❌ {exc}")
+            return 1
+        save_config(result)
+        print(f"✅ Конфиг сохранён: {config_path()}")
+        cfg = result
+
+    return run_client(cfg)
 
 
 if __name__ == "__main__":
