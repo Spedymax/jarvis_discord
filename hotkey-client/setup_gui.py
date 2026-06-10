@@ -13,8 +13,8 @@ class SetupWindow(ctk.CTk):
     def __init__(self, initial: dict | None = None) -> None:
         super().__init__()
         self.title("Jarvis Hotkeys — настройка")
-        self.geometry("600x680")
-        self.minsize(520, 560)
+        self.geometry("720x680")
+        self.minsize(640, 560)
 
         self.result: dict | None = None
         self._token: str | None = None
@@ -70,8 +70,8 @@ class SetupWindow(ctk.CTk):
         self.capture_btn.pack(side="left")
         self.combo_label = ctk.CTkLabel(add_row, text="—", width=140)
         self.combo_label.pack(side="left", padx=8)
-        self.sound_box = ctk.CTkComboBox(add_row, values=[""], width=150)
-        self.sound_box.set("")
+        self.sound_box = ctk.CTkComboBox(add_row, values=[setup_core.STOP_LABEL], width=170)
+        self.sound_box.set(setup_core.STOP_LABEL)
         self.sound_box.pack(side="left", padx=8)
         self.add_btn = ctk.CTkButton(add_row, text="Добавить", width=90,
                                      command=self._add_binding, state="disabled")
@@ -104,7 +104,10 @@ class SetupWindow(ctk.CTk):
         self._token = data["token"]
         self._webhook = data["webhook_url"]
         self._sounds = data["sounds"]
-        self.sound_box.configure(values=self._sounds or ["(звуков нет — впиши имя)"])
+        self.sound_box.configure(
+            values=[setup_core.STOP_LABEL]
+            + (self._sounds or ["(звуков нет — впиши имя)"])
+        )
         self.code_hint.configure(text=f"✓ Код принят. Звуков: {len(self._sounds)}",
                                  text_color="#41e07a")
         self._refresh_save_state()
@@ -164,13 +167,19 @@ class SetupWindow(ctk.CTk):
 
     def _add_binding(self) -> None:
         sound = self.sound_box.get().strip()
-        if not self._pending_combo or not sound or sound.startswith("("):
-            self.warn_label.configure(text="⚠ Выбери звук.")
-            return
-        if " " in sound:
-            # протокол вебхука разделяет токен и имя первым пробелом —
-            # имя с пробелом бот не зарезолвит
-            self.warn_label.configure(text="⚠ В имени звука не может быть пробелов.")
+        if sound == setup_core.STOP_LABEL:
+            sound = setup_core.STOP_COMMAND  # команда содержит пробел — guard ниже не для неё
+        else:
+            if not sound or sound.startswith("("):
+                self.warn_label.configure(text="⚠ Выбери звук.")
+                return
+            if " " in sound:
+                # протокол вебхука разделяет токен и имя первым пробелом —
+                # имя с пробелом бот не зарезолвит
+                self.warn_label.configure(text="⚠ В имени звука не может быть пробелов.")
+                return
+        if not self._pending_combo:
+            self.warn_label.configure(text="⚠ Сначала нажми комбинацию.")
             return
         self._bindings[self._pending_combo] = sound
         self._pending_combo = None
@@ -189,9 +198,10 @@ class SetupWindow(ctk.CTk):
         for child in self.rows_frame.winfo_children():
             child.destroy()
         for combo, sound in self._bindings.items():
+            shown = setup_core.STOP_LABEL if sound == setup_core.STOP_COMMAND else sound
             row = ctk.CTkFrame(self.rows_frame, fg_color="transparent")
             row.pack(fill="x", pady=2)
-            ctk.CTkLabel(row, text=f"{combo}  →  {sound}", anchor="w").pack(
+            ctk.CTkLabel(row, text=f"{combo}  →  {shown}", anchor="w").pack(
                 side="left", padx=4, fill="x", expand=True)
             ctk.CTkButton(row, text="✕", width=30, fg_color="transparent",
                           hover_color="#7a2020",
