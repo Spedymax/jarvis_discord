@@ -1,6 +1,8 @@
 """Tests for pure hotkey helpers: payload parse, throttle, member resolve."""
 from __future__ import annotations
 
+import base64
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -62,3 +64,30 @@ def test_find_member_in_voice_not_in_voice() -> None:
     guild = SimpleNamespace(voice_channels=[SimpleNamespace(members=[])])
     bot = SimpleNamespace(guilds=[guild])
     assert hotkeys.find_member_in_voice(bot, 42) is None
+
+
+def test_encode_setup_code_format() -> None:
+    code = hotkeys.encode_setup_code("tok123", "https://discord.com/api/webhooks/1/a", ["жыр", "лол"])
+    assert code.startswith("JHK1.")
+    assert " " not in code and "\n" not in code
+    data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
+    assert data == {
+        "v": 1,
+        "t": "tok123",
+        "w": "https://discord.com/api/webhooks/1/a",
+        "s": ["жыр", "лол"],
+    }
+
+
+def test_encode_setup_code_caps_sounds_at_50() -> None:
+    names = [f"s{i}" for i in range(60)]
+    code = hotkeys.encode_setup_code("t", "w", names)
+    data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
+    assert len(data["s"]) == 50
+    assert data["s"][0] == "s0"
+
+
+def test_encode_setup_code_empty_sounds_ok() -> None:
+    code = hotkeys.encode_setup_code("t", "w", [])
+    data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
+    assert data["s"] == []

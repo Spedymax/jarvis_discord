@@ -1,6 +1,8 @@
 """Pure helpers for the hotkey feature (no discord side effects)."""
 from __future__ import annotations
 
+import base64
+import json
 from typing import Any, Optional
 
 TOKEN_NBYTES = 24  # secrets.token_urlsafe(24) -> 32-char base64url string
@@ -45,3 +47,19 @@ def find_member_in_voice(bot: Any, user_id: int) -> Optional[Any]:
                 if getattr(member, "id", None) == user_id and getattr(member, "voice", None):
                     return member
     return None
+
+
+SETUP_CODE_PREFIX = "JHK1."
+SETUP_CODE_MAX_SOUNDS = 50  # cap, чтобы setup-сообщение оставалось обозримым; не гарантия лимита Discord
+
+
+def encode_setup_code(token: str, webhook_url: str, sound_names: list[str]) -> str:
+    """Compact setup code the user pastes into the client wizard."""
+    payload = {
+        "v": 1,
+        "t": token,
+        "w": webhook_url,
+        "s": sound_names[:SETUP_CODE_MAX_SOUNDS],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return SETUP_CODE_PREFIX + base64.urlsafe_b64encode(raw).decode("ascii")
