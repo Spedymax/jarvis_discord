@@ -33,7 +33,8 @@ jobs:
 
       - name: Build exe
         run: >
-          pyinstaller --onefile --collect-all customtkinter --collect-all pynput
+          pyinstaller --onefile --noconsole --collect-all customtkinter
+          --collect-all pynput --collect-all pystray
           --name jarvis-hotkeys hotkey-client/client.py
 
       # Тег hotkey-client-latest остаётся на первом SHA — это ок: ссылка
