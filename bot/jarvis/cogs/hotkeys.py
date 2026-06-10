@@ -10,7 +10,14 @@ from discord import app_commands
 from discord.ext import commands
 
 from .. import db, state
-from ..hotkeys import TOKEN_NBYTES, Throttle, encode_setup_code, find_member_in_voice, parse_payload
+from ..hotkeys import (
+    STOP_COMMAND,
+    TOKEN_NBYTES,
+    Throttle,
+    encode_setup_code,
+    find_member_in_voice,
+    parse_payload,
+)
 from .sound import play_sound_core, ensure_voice_for_member
 
 log = logging.getLogger(__name__)
@@ -127,6 +134,16 @@ class HotkeysCog(commands.Cog):
                 return
             member = find_member_in_voice(self.bot, user_id)
             if member is None:
+                return
+            if sound_name.strip().lower() == STOP_COMMAND:
+                # стоп звука саундборда, как кнопка ⏹: skip → track_end
+                # сам резюмит прерванную музыку; войс-коннект не нужен
+                gp = state.get(member.guild.id)
+                if gp is not None and gp.playing_sound:
+                    try:
+                        await gp.wl.skip(force=True)
+                    except Exception:
+                        log.exception("Failed to stop sound via hotkey")
                 return
             sound = await db.get_sound(member.guild.id, sound_name.strip().lower())
             if sound is None:
