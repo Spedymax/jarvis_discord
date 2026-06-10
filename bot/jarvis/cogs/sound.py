@@ -340,32 +340,38 @@ async def play_sound_core(
 
 async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> None:
     """Entry point used by both slash and Soundboard view."""
+    # Войс-коннект и резолв файла через Lavalink могут не уложиться в
+    # 3-секундный дедлайн interaction — подтверждаем сразу, дальше followup.
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except discord.NotFound:
+        return  # interaction уже протух, отвечать некуда
+
     sound = await db.get_sound_by_id(sound_id)
     if sound is None:
-        await interaction.response.send_message("❌ Звук не найден.", ephemeral=True)
+        await interaction.followup.send("❌ Звук не найден.", ephemeral=True)
         return
 
     try:
         gp = await _ensure_voice(interaction)
     except JarvisError as e:
-        await interaction.response.send_message(f"❌ {e.user_message}", ephemeral=True)
+        await interaction.followup.send(f"❌ {e.user_message}", ephemeral=True)
         return
 
     requester_name = getattr(interaction.user, "display_name", "—")
     ok = await play_sound_core(gp, sound, requester_name)
     if not ok:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ Файл недоступен — возможно, удалён.",
             ephemeral=True,
         )
         return
 
-    if not interaction.response.is_done():
-        await interaction.response.send_message(
-            f"🔊 **{sound.name}**",
-            view=StopSoundView(gp, sound.name),
-            ephemeral=True,
-        )
+    await interaction.followup.send(
+        f"🔊 **{sound.name}**",
+        view=StopSoundView(gp, sound.name),
+        ephemeral=True,
+    )
     if gp.sound_interaction is not None and gp.sound_interaction is not interaction:
         try:
             await gp.sound_interaction.delete_original_response()

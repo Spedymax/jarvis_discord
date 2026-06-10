@@ -268,10 +268,15 @@ def build_bot(settings: Settings) -> commands.Bot:
                 sentry_sdk.capture_exception(original)
                 msg = "💥 Что-то поломалось, лог записан."
 
-        if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
-        else:
-            await interaction.response.send_message(msg, ephemeral=True)
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        except discord.NotFound:
+            # Interaction протух (10062) — сообщение доставить уже некуда,
+            # но и заваливать Sentry повторной ошибкой не нужно.
+            log.warning("Could not deliver error message: interaction expired")
 
     return bot
 
