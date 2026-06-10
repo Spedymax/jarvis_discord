@@ -1,0 +1,39 @@
+name: Release hotkey client
+
+on:
+  push:
+    branches: [main]
+    paths: ["hotkey-client/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install deps
+        run: pip install -r hotkey-client/requirements.txt pyinstaller
+
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --collect-all customtkinter
+          --name jarvis-hotkeys hotkey-client/client.py
+
+      - name: Publish to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release view hotkey-client-latest >/dev/null 2>&1 || \
+            gh release create hotkey-client-latest \
+              --title "Hotkey client (latest)" \
+              --notes "Автосборка клиента хоткеев. Скачай jarvis-hotkeys.exe и запусти."
+          gh release upload hotkey-client-latest dist/jarvis-hotkeys.exe --clobber
