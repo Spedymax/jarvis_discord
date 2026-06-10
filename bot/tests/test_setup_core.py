@@ -4,7 +4,9 @@ setup_core has zero third-party deps and must import in any CI.
 """
 from __future__ import annotations
 
+import base64
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -54,7 +56,6 @@ def test_decode_corrupt_base64() -> None:
 
 def test_decode_missing_fields() -> None:
     core = _load_core()
-    import base64, json
     raw = base64.urlsafe_b64encode(json.dumps({"v": 1}).encode()).decode()
     with pytest.raises(core.SetupCodeError):
         core.decode_setup_code("JHK1." + raw)
@@ -95,3 +96,34 @@ def test_make_config() -> None:
     core = _load_core()
     cfg = core.make_config("t", "w", {"<f13>": "жыр"})
     assert cfg == {"token": "t", "webhook_url": "w", "bindings": {"<f13>": "жыр"}}
+
+
+def test_decode_restores_stripped_padding() -> None:
+    core = _load_core()
+    code = bot_hotkeys.encode_setup_code("tok123", "https://w", ["жыр"])
+    assert core.decode_setup_code(code.rstrip("="))["token"] == "tok123"
+
+
+def test_decode_wrong_version() -> None:
+    core = _load_core()
+    raw = base64.urlsafe_b64encode(json.dumps({"v": 2, "t": "t", "w": "w"}).encode()).decode()
+    with pytest.raises(core.SetupCodeError):
+        core.decode_setup_code("JHK1." + raw)
+
+
+def test_decode_blank_token_rejected() -> None:
+    core = _load_core()
+    raw = base64.urlsafe_b64encode(json.dumps({"v": 1, "t": " ", "w": "w"}).encode()).decode()
+    with pytest.raises(core.SetupCodeError):
+        core.decode_setup_code("JHK1." + raw)
+
+
+def test_needs_modifier_warning_safe_special_keys() -> None:
+    core = _load_core()
+    assert core.needs_modifier_warning("<num_lock>") is False
+    assert core.needs_modifier_warning("<insert>") is False
+
+
+def test_combo_to_string_full_modifier_order() -> None:
+    core = _load_core()
+    assert core.combo_to_string({"shift", "alt"}, "x") == "<alt>+<shift>+x"

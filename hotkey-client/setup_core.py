@@ -33,11 +33,20 @@ def decode_setup_code(code: str) -> dict:
             "Код должен начинаться с 'JHK1.' — скопируй его целиком из /hotkey setup."
         )
     try:
-        raw = base64.urlsafe_b64decode(code[len(SETUP_CODE_PREFIX):].encode("ascii"))
+        b64_part = code[len(SETUP_CODE_PREFIX):]
+        b64_part += "=" * (-len(b64_part) % 4)
+        raw = base64.urlsafe_b64decode(b64_part.encode("ascii"))
         data = json.loads(raw)
     except Exception as exc:
         raise SetupCodeError("Код повреждён — скопируй его заново целиком.") from exc
-    if not isinstance(data, dict) or not data.get("t") or not data.get("w"):
+    if not isinstance(data, dict):
+        raise SetupCodeError("Код повреждён — скопируй его заново целиком.")
+    if data.get("v") != 1:
+        raise SetupCodeError("Код от другой версии — обнови клиент и перегенерь код.")
+    if (
+        not str(data.get("t") or "").strip()
+        or not str(data.get("w") or "").strip()
+    ):
         raise SetupCodeError("В коде нет токена или webhook URL.")
     return {
         "token": str(data["t"]),
@@ -69,12 +78,20 @@ def combo_to_string(modifiers: set, key: str) -> str:
     return "+".join(parts)
 
 
+_SAFE_BARE = frozenset(
+    {f"f{i}" for i in range(1, 21)}
+    | {
+        "num_lock", "scroll_lock", "insert", "delete", "home", "end",
+        "page_up", "page_down", "print_screen", "pause",
+    }
+)
+
+
 def needs_modifier_warning(combo: str) -> bool:
-    """True for a bare non-F key ('a', '<space>') — it would swallow typing."""
+    """True for a bare key that would fire during normal typing ('a', '<space>')."""
     if "+" in combo:
         return False
-    key = combo.strip("<>")
-    return not (key.startswith("f") and key[1:].isdigit())
+    return combo.strip("<>") not in _SAFE_BARE
 
 
 def make_config(token: str, webhook_url: str, bindings: dict) -> dict:
