@@ -29,3 +29,7 @@ lavalink/plugins/*.jar
 # Personal notes (Claude scratchpad)
 NOTES.md
 CLAUDE.md
+
+# Hotkey client local artifacts
+hotkey-client/hotkey-client.log
+hotkey-client/config.yaml
