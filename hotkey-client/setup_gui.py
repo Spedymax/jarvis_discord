@@ -6,9 +6,6 @@ from pynput import keyboard
 
 import setup_core
 
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
-
 ACCENT = "#ff9933"  # цвет карточки now-playing
 
 
@@ -107,7 +104,7 @@ class SetupWindow(ctk.CTk):
         self._token = data["token"]
         self._webhook = data["webhook_url"]
         self._sounds = data["sounds"]
-        self.sound_box.configure(values=self._sounds or [""])
+        self.sound_box.configure(values=self._sounds or ["(звуков нет — впиши имя)"])
         self.code_hint.configure(text=f"✓ Код принят. Звуков: {len(self._sounds)}",
                                  text_color="#41e07a")
         self._refresh_save_state()
@@ -133,18 +130,26 @@ class SetupWindow(ctk.CTk):
             if kind == "modifier":
                 self._mods.add(value)
                 return
-            combo = setup_core.combo_to_string(self._mods, value)
+            combo = setup_core.combo_to_string(frozenset(self._mods), value)
             self.after(0, self._finish_capture, combo)
 
         self._listener = keyboard.Listener(on_press=on_press)
         self._listener.start()
 
     def _finish_capture(self, combo: str | None) -> None:
-        if self._listener is not None:
-            self._listener.stop()
-            self._listener = None
+        if self._listener is None:
+            return  # второй queued-колбэк после уже обработанного захвата
+        self._listener.stop()
+        self._listener = None
         self.capture_btn.configure(text="⌨ Нажми комбинацию")
         if combo is None:
+            return
+        try:
+            keyboard.HotKey.parse(combo)
+        except ValueError:
+            self.combo_label.configure(text="—")
+            self.warn_label.configure(
+                text="⚠ Эта клавиша не подходит для глобального хоткея — попробуй другую.")
             return
         self._pending_combo = combo
         self.combo_label.configure(text=combo)
@@ -159,7 +164,7 @@ class SetupWindow(ctk.CTk):
 
     def _add_binding(self) -> None:
         sound = self.sound_box.get().strip()
-        if not self._pending_combo or not sound:
+        if not self._pending_combo or not sound or sound.startswith("("):
             self.warn_label.configure(text="⚠ Выбери звук.")
             return
         self._bindings[self._pending_combo] = sound
@@ -208,6 +213,8 @@ class SetupWindow(ctk.CTk):
 
 def run_setup_gui(initial: dict | None = None) -> dict | None:
     """Open the wizard; return a config dict or None if cancelled."""
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("blue")
     win = SetupWindow(initial)
     win.mainloop()
     return win.result
