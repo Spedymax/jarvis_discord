@@ -167,6 +167,11 @@ class SetupWindow(ctk.CTk):
         if not self._pending_combo or not sound or sound.startswith("("):
             self.warn_label.configure(text="⚠ Выбери звук.")
             return
+        if " " in sound:
+            # протокол вебхука разделяет токен и имя первым пробелом —
+            # имя с пробелом бот не зарезолвит
+            self.warn_label.configure(text="⚠ В имени звука не может быть пробелов.")
+            return
         self._bindings[self._pending_combo] = sound
         self._pending_combo = None
         self.combo_label.configure(text="—")
