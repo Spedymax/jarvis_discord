@@ -50,16 +50,25 @@ def find_member_in_voice(bot: Any, user_id: int) -> Optional[Any]:
 
 
 SETUP_CODE_PREFIX = "JHK1."
-SETUP_CODE_MAX_SOUNDS = 50  # cap, чтобы setup-сообщение оставалось обозримым; не гарантия лимита Discord
+SETUP_CODE_MAX_SOUNDS = 50  # верхний cap по количеству; бюджет длины — через max_chars
 
 
-def encode_setup_code(token: str, webhook_url: str, sound_names: list[str]) -> str:
-    """Compact setup code the user pastes into the client wizard."""
-    payload = {
-        "v": 1,
-        "t": token,
-        "w": webhook_url,
-        "s": sound_names[:SETUP_CODE_MAX_SOUNDS],
-    }
-    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return SETUP_CODE_PREFIX + base64.urlsafe_b64encode(raw).decode("ascii")
+def encode_setup_code(
+    token: str,
+    webhook_url: str,
+    sound_names: list[str],
+    max_chars: int | None = None,
+) -> str:
+    """Compact setup code the user pastes into the client wizard.
+
+    С max_chars — отбрасывает звуки с конца списка (наименее популярные),
+    пока код не уложится в бюджет; токен и webhook не трогаются.
+    """
+    names = list(sound_names[:SETUP_CODE_MAX_SOUNDS])
+    while True:
+        payload = {"v": 1, "t": token, "w": webhook_url, "s": names}
+        raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        code = SETUP_CODE_PREFIX + base64.urlsafe_b64encode(raw).decode("ascii")
+        if max_chars is None or len(code) <= max_chars or not names:
+            return code
+        names.pop()

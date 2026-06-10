@@ -22,6 +22,7 @@ CLIENT_EXE_URL = (
     "https://github.com/Spedymax/jarvis_discord/releases/download/"
     "hotkey-client-latest/jarvis-hotkeys.exe"
 )
+MAX_SETUP_CODE_CHARS = 1400  # ~500 символов шаблона + запас до лимита Discord 2000
 
 SETUP_INSTRUCTIONS = (
     "**Хоткеи саундборда**\n"
@@ -90,8 +91,8 @@ class HotkeysCog(commands.Cog):
         token = secrets.token_urlsafe(TOKEN_NBYTES)
         await db.upsert_hotkey_token(token, interaction.user.id, int(time.time()))
         sounds = await db.list_sounds(interaction.guild.id)
-        names = [s.name for s in sorted(sounds, key=lambda s: s.play_count, reverse=True)]
-        code = encode_setup_code(token, webhook_url, names)
+        names = [s.name for s in sounds]
+        code = encode_setup_code(token, webhook_url, names, max_chars=MAX_SETUP_CODE_CHARS)
         await interaction.followup.send(
             SETUP_INSTRUCTIONS.format(code=code),
             ephemeral=True,

@@ -91,3 +91,19 @@ def test_encode_setup_code_empty_sounds_ok() -> None:
     code = hotkeys.encode_setup_code("t", "w", [])
     data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
     assert data["s"] == []
+
+
+def test_encode_setup_code_respects_max_chars() -> None:
+    names = ["кириллическое-имя-" + str(i) for i in range(50)]
+    code = hotkeys.encode_setup_code("t" * 32, "https://discord.com/api/webhooks/1/a", names, max_chars=1400)
+    assert len(code) <= 1400
+    data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
+    assert data["s"] == names[: len(data["s"])]  # отбрасываем только с конца
+    assert data["t"] == "t" * 32
+
+
+def test_encode_setup_code_max_chars_never_drops_token() -> None:
+    code = hotkeys.encode_setup_code("tok", "https://w", ["оченьдлинноеимя" * 2], max_chars=10)
+    data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
+    assert data["t"] == "tok"
+    assert data["s"] == []
