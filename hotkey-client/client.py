@@ -33,7 +33,6 @@ def validate_config(cfg: dict) -> None:
     bindings = cfg.get("bindings") or {}
     if not bindings:
         raise ConfigError("config: 'bindings' пуст")
-    seen: set[str] = set()
     for combo, sound in bindings.items():
         if not sound:
             raise ConfigError(f"config: пустой звук для '{combo}'")
@@ -41,9 +40,6 @@ def validate_config(cfg: dict) -> None:
             keyboard.HotKey.parse(combo)
         except Exception as exc:
             raise ConfigError(f"config: кривая комбинация '{combo}': {exc}") from exc
-        if combo in seen:
-            print(f"⚠ дубликат комбо '{combo}' — перетрёт предыдущий")
-        seen.add(combo)
 
 
 def config_path() -> Path:
@@ -58,14 +54,20 @@ def load_config() -> dict:
     if not path.exists():
         raise ConfigError("нет config.yaml рядом со скриптом (скопируй config.example.yaml)")
     with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
+        try:
+            cfg = yaml.safe_load(f) or {}
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"config.yaml повреждён: {exc}") from exc
     validate_config(cfg)
     return cfg
 
 
 def save_config(cfg: dict) -> None:
-    with open(config_path(), "w", encoding="utf-8") as f:
+    target = config_path()
+    tmp = target.with_suffix(".yaml.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
+    tmp.replace(target)
 
 
 def _send(webhook_url: str, token: str, sound: str) -> None:
@@ -112,7 +114,9 @@ def main() -> int:
     cfg: dict | None = None
     try:
         cfg = load_config()
-    except ConfigError:
+    except ConfigError as exc:
+        if config_path().exists():
+            print(f"⚠ Текущий конфиг не загрузился ({exc}) — настроим заново.")
         cfg = None
 
     if cfg is None or force_setup:
