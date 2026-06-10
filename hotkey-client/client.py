@@ -231,12 +231,13 @@ def main() -> int:
     manager = HotkeyManager()
     manager.start(cfg)
 
-    import tray  # lazy: pystray/Pillow только в рантайме
+    import signal
+    import tray  # lazy: тесты грузят client.py без установленного pystray
 
-    try:
-        tray.run_tray(on_settings=lambda: open_settings(manager), on_quit=manager.stop)
-    except KeyboardInterrupt:
-        manager.stop()
+    # PumpMessages не возвращает управление питону — Ctrl+C при запуске из
+    # исходников делаем жёстким завершением вместо молчаливого игнора.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    tray.run_tray(on_settings=lambda: open_settings(manager), on_quit=manager.stop)
     return 0
 
 
