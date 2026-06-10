@@ -52,6 +52,10 @@ def find_member_in_voice(bot: Any, user_id: int) -> Optional[Any]:
 SETUP_CODE_PREFIX = "JHK1."
 SETUP_CODE_MAX_SOUNDS = 50  # верхний cap по количеству; бюджет длины — через max_chars
 
+# Зарезервированная команда «стоп звука»: содержит пробел, а имена звуков
+# валидируются ^\S{1,30}$ — коллизия с реальным звуком невозможна.
+STOP_COMMAND = "stop sound"
+
 
 def encode_setup_code(
     token: str,

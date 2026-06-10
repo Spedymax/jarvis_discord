@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -127,3 +128,18 @@ def test_needs_modifier_warning_safe_special_keys() -> None:
 def test_combo_to_string_full_modifier_order() -> None:
     core = _load_core()
     assert core.combo_to_string({"shift", "alt"}, "x") == "<alt>+<shift>+x"
+
+
+def test_stop_command_matches_bot_and_cannot_be_sound_name() -> None:
+    core = _load_core()
+    assert core.STOP_COMMAND == bot_hotkeys.STOP_COMMAND
+    assert " " in core.STOP_COMMAND
+    # NAME_RE бота (^\S{1,30}$) — имя звука не может содержать пробел,
+    # значит коллизия команды с реальным звуком невозможна
+    assert re.match(r"^\S{1,30}$", core.STOP_COMMAND) is None
+
+
+def test_stop_label_is_not_a_valid_sound_value() -> None:
+    core = _load_core()
+    assert core.STOP_LABEL != core.STOP_COMMAND
+    assert " " in core.STOP_LABEL

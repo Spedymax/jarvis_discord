@@ -10,6 +10,11 @@ import json
 
 SETUP_CODE_PREFIX = "JHK1."
 
+# Дублируется с bot/jarvis/hotkeys.py::STOP_COMMAND (standalone-клиент);
+# равенство зафиксировано кросс-тестом в bot/tests/test_setup_core.py.
+STOP_COMMAND = "stop sound"
+STOP_LABEL = "⏹ Остановить звук"  # отображение в GUI
+
 MODIFIER_ORDER = ("ctrl", "alt", "shift", "cmd")
 
 # pynput Key.name -> canonical modifier
