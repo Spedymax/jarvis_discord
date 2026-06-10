@@ -64,3 +64,69 @@ def test_config_path_next_to_script() -> None:
     p = client.config_path()
     assert p.name == "config.yaml"
     assert p.parent == CLIENT_PATH.parent
+
+
+def _fake_listener_cls():
+    created = []
+
+    class FakeListener:
+        def __init__(self, hotkey_map):
+            self.hotkey_map = hotkey_map
+            self.started = False
+            self.stopped = False
+            created.append(self)
+
+        def start(self):
+            self.started = True
+
+        def stop(self):
+            self.stopped = True
+
+    return FakeListener, created
+
+
+MANAGER_CFG = {
+    "token": "tok",
+    "webhook_url": "https://discord.com/api/webhooks/1/abc",
+    "bindings": {"<f13>": "жыр"},
+}
+
+
+def test_hotkey_manager_start() -> None:
+    client = _load_client()
+    cls, created = _fake_listener_cls()
+    m = client.HotkeyManager(listener_cls=cls)
+    m.start(MANAGER_CFG)
+    assert len(created) == 1
+    assert created[0].started is True
+    assert set(created[0].hotkey_map) == {"<f13>"}
+
+
+def test_hotkey_manager_reload_stops_old_starts_new() -> None:
+    client = _load_client()
+    cls, created = _fake_listener_cls()
+    m = client.HotkeyManager(listener_cls=cls)
+    m.start(MANAGER_CFG)
+    m.reload({**MANAGER_CFG, "bindings": {"<f14>": "лол"}})
+    assert created[0].stopped is True
+    assert created[1].started is True
+    assert set(created[1].hotkey_map) == {"<f14>"}
+
+
+def test_hotkey_manager_stop_idempotent() -> None:
+    client = _load_client()
+    cls, created = _fake_listener_cls()
+    m = client.HotkeyManager(listener_cls=cls)
+    m.start(MANAGER_CFG)
+    m.stop()
+    m.stop()  # второй stop — no-op, не бросает
+    assert created[0].stopped is True
+
+
+def test_validate_config_rejects_spaced_sound_but_allows_stop_command() -> None:
+    client = _load_client()
+    base = {"token": "t", "webhook_url": "w"}
+    with pytest.raises(client.ConfigError):
+        client.validate_config({**base, "bindings": {"<f13>": "two words"}})
+    # зарезервированная стоп-команда — единственное значение с пробелом
+    client.validate_config({**base, "bindings": {"<f13>": "stop sound"}})
