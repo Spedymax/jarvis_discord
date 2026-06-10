@@ -27,7 +27,7 @@ def _load_client():
     except Exception as exc:  # e.g. pynput backend needs a display
         pytest.skip(f"client import failed: {exc}")
     finally:
-        sys.path.remove(str(CLIENT_PATH.parent))
+        sys.path.pop(0)  # мы вставляли в позицию 0; pop(0) не затронет чужие дубликаты
     return mod
 
 
@@ -133,4 +133,4 @@ def test_validate_config_rejects_spaced_sound_but_allows_stop_command() -> None:
     with pytest.raises(client.ConfigError):
         client.validate_config({**base, "bindings": {"<f13>": "two words"}})
     # зарезервированная стоп-команда — единственное значение с пробелом
-    client.validate_config({**base, "bindings": {"<f13>": "stop sound"}})
+    client.validate_config({**base, "bindings": {"<f13>": client.STOP_COMMAND}})

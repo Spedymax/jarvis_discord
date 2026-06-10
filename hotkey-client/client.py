@@ -64,6 +64,8 @@ def log_path() -> Path:
 
 def setup_logging() -> None:
     """Файл рядом с exe (перезапись на старте); из исходников — ещё и консоль."""
+    if log.handlers:
+        return  # уже настроено — не задваиваем хендлеры
     log.setLevel(logging.INFO)
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     try:
@@ -112,13 +114,18 @@ def _send(webhook_url: str, token: str, sound: str) -> None:
 
 
 class HotkeyManager:
-    """GlobalHotKeys со start/reload/stop — биндинги меняются без перезапуска."""
+    """GlobalHotKeys со start/reload/stop — биндинги меняются без перезапуска.
+
+    last_fire намеренно локальный — debounce (150мс) сбрасывается на reload,
+    это осознанный trade-off.
+    """
 
     def __init__(self, listener_cls=keyboard.GlobalHotKeys) -> None:
         self._listener_cls = listener_cls
         self._listener = None
+        self._lock = threading.Lock()
 
-    def start(self, cfg: dict) -> None:
+    def _start_locked(self, cfg: dict) -> None:
         token = cfg["token"]
         webhook_url = cfg["webhook_url"]
         last_fire: dict[str, float] = {}
@@ -141,14 +148,23 @@ class HotkeyManager:
         self._listener.start()
         log.info("Загружено хоткеев: %d", len(hotkey_map))
 
-    def reload(self, cfg: dict) -> None:
-        self.stop()
-        self.start(cfg)
-
-    def stop(self) -> None:
+    def _stop_locked(self) -> None:
         if self._listener is not None:
             self._listener.stop()
             self._listener = None
+
+    def start(self, cfg: dict) -> None:
+        with self._lock:
+            self._start_locked(cfg)
+
+    def reload(self, cfg: dict) -> None:
+        with self._lock:
+            self._stop_locked()
+            self._start_locked(cfg)
+
+    def stop(self) -> None:
+        with self._lock:
+            self._stop_locked()
 
 
 def main() -> int:
