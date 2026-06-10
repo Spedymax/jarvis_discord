@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from .. import db, state
-from ..hotkeys import TOKEN_NBYTES, Throttle, find_member_in_voice, parse_payload
+from ..hotkeys import TOKEN_NBYTES, Throttle, encode_setup_code, find_member_in_voice, parse_payload
 from .sound import play_sound_core, ensure_voice_for_member
 
 log = logging.getLogger(__name__)
@@ -18,15 +18,21 @@ log = logging.getLogger(__name__)
 SERVICE_CHANNEL_NAME = "jarvis-hotkeys"
 THROTTLE_INTERVAL = 0.5  # seconds per user
 
+CLIENT_EXE_URL = (
+    "https://github.com/Spedymax/jarvis_discord/releases/download/"
+    "hotkey-client-latest/jarvis-hotkeys.exe"
+)
+
 SETUP_INSTRUCTIONS = (
     "**Хоткеи саундборда**\n"
-    "1. Скачай папку `hotkey-client/` из репозитория.\n"
-    "2. `pip install -r requirements.txt`, скопируй `config.example.yaml` → `config.yaml`.\n"
-    "3. Впиши значения ниже, пропиши биндинги, запусти `python client.py`.\n\n"
-    "**token:** `{token}`\n"
-    "**webhook_url:** `{webhook}`\n\n"
-    "Имена звуков — как в `/sound list`. Токен личный, не делись им. "
-    "Сбросить — `/hotkey revoke`, затем снова `/hotkey setup`."
+    "1. Скачай клиент: " + CLIENT_EXE_URL + "\n"
+    "2. Запусти. SmartScreen ругнётся на неподписанный exe — "
+    "«Подробнее → Выполнить в любом случае» (один раз).\n"
+    "3. В открывшемся окне вставь setup-код:\n"
+    "```{code}```\n"
+    "Дальше окно само ведёт: жмёшь комбинацию → выбираешь звук → «Сохранить».\n"
+    "Код личный (внутри твой токен) — не делись им. Новые звуки в выпадашке — "
+    "перегенерь код через `/hotkey setup`. Сбросить доступ: `/hotkey revoke`."
 )
 
 
@@ -83,8 +89,11 @@ class HotkeysCog(commands.Cog):
 
         token = secrets.token_urlsafe(TOKEN_NBYTES)
         await db.upsert_hotkey_token(token, interaction.user.id, int(time.time()))
+        sounds = await db.list_sounds(interaction.guild.id)
+        names = [s.name for s in sorted(sounds, key=lambda s: s.play_count, reverse=True)]
+        code = encode_setup_code(token, webhook_url, names)
         await interaction.followup.send(
-            SETUP_INSTRUCTIONS.format(token=token, webhook=webhook_url),
+            SETUP_INSTRUCTIONS.format(code=code),
             ephemeral=True,
         )
 
