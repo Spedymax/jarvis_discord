@@ -130,12 +130,15 @@ class HotkeysCog(commands.Cog):
             user_id = await db.get_user_id_by_token(token)
             if user_id is None:
                 return
-            if not self.throttle.allow(str(user_id), now=time.monotonic()):
+            normalized = sound_name.strip().lower()
+            is_stop = normalized == STOP_COMMAND
+            # стоп не троттлим: «play и тут же stop» должен срабатывать
+            if not is_stop and not self.throttle.allow(str(user_id), now=time.monotonic()):
                 return
             member = find_member_in_voice(self.bot, user_id)
             if member is None:
                 return
-            if sound_name.strip().lower() == STOP_COMMAND:
+            if is_stop:
                 # стоп звука саундборда, как кнопка ⏹: skip → track_end
                 # сам резюмит прерванную музыку; войс-коннект не нужен
                 gp = state.get(member.guild.id)
@@ -144,8 +147,8 @@ class HotkeysCog(commands.Cog):
                         await gp.wl.skip(force=True)
                     except Exception:
                         log.exception("Failed to stop sound via hotkey")
-                return
-            sound = await db.get_sound(member.guild.id, sound_name.strip().lower())
+                return  # STOP_COMMAND никогда не является именем звука
+            sound = await db.get_sound(member.guild.id, normalized)
             if sound is None:
                 return
             gp = await ensure_voice_for_member(member)

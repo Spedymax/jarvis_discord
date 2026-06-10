@@ -143,3 +143,4 @@ def test_stop_label_is_not_a_valid_sound_value() -> None:
     core = _load_core()
     assert core.STOP_LABEL != core.STOP_COMMAND
     assert " " in core.STOP_LABEL
+    assert re.match(r"^\S{1,30}$", core.STOP_LABEL) is None
