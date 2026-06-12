@@ -144,3 +144,29 @@ def test_stop_label_is_not_a_valid_sound_value() -> None:
     assert core.STOP_LABEL != core.STOP_COMMAND
     assert " " in core.STOP_LABEL
     assert re.match(r"^\S{1,30}$", core.STOP_LABEL) is None
+
+
+def test_list_command_matches_bot_and_cannot_be_sound_name() -> None:
+    core = _load_core()
+    assert core.LIST_COMMAND == bot_hotkeys.LIST_COMMAND
+    assert " " in core.LIST_COMMAND
+    assert re.match(r"^\S{1,30}$", core.LIST_COMMAND) is None
+
+
+def test_parse_sound_list_multi_embed() -> None:
+    core = _load_core()
+    embeds = [{"description": "жыр\nлол"}, {"description": "сос"}]
+    assert core.parse_sound_list(embeds) == ["жыр", "лол", "сос"]
+
+
+def test_parse_sound_list_empty_inputs() -> None:
+    core = _load_core()
+    assert core.parse_sound_list([]) == []
+    assert core.parse_sound_list([{"description": "—"}]) == []  # маркер пустого списка
+    assert core.parse_sound_list([{"description": ""}]) == []
+    assert core.parse_sound_list([{}]) == []
+
+
+def test_zero_width_exported() -> None:
+    core = _load_core()
+    assert core.ZERO_WIDTH == "​"

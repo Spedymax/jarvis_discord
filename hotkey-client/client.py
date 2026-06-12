@@ -22,9 +22,7 @@ import requests
 import yaml
 from pynput import keyboard
 
-from setup_core import STOP_COMMAND
-
-ZERO_WIDTH = "​"
+from setup_core import STOP_COMMAND, ZERO_WIDTH
 DEBOUNCE_SECONDS = 0.15
 
 
