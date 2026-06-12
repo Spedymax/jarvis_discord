@@ -342,8 +342,11 @@ async def play_sound_by_id(interaction: discord.Interaction, sound_id: int) -> N
     """Entry point used by both slash and Soundboard view."""
     # Войс-коннект и резолв файла через Lavalink могут не уложиться в
     # 3-секундный дедлайн interaction — подтверждаем сразу, дальше followup.
+    # thinking=True обязателен: для кнопок саундборда дефолтный defer — это
+    # DeferredMessageUpdate, и тогда delete_original_response() на track_end
+    # удалит само сообщение с панелью, а не эфемерное «🔊».
     try:
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True, thinking=True)
     except discord.NotFound:
         return  # interaction уже протух, отвечать некуда
 
