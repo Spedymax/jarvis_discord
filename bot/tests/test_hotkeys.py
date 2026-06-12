@@ -79,11 +79,11 @@ def test_encode_setup_code_format() -> None:
     }
 
 
-def test_encode_setup_code_caps_sounds_at_50() -> None:
-    names = [f"s{i}" for i in range(60)]
+def test_encode_setup_code_caps_sound_count() -> None:
+    names = [f"s{i}" for i in range(hotkeys.SETUP_CODE_MAX_SOUNDS + 10)]
     code = hotkeys.encode_setup_code("t", "w", names)
     data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
-    assert len(data["s"]) == 50
+    assert len(data["s"]) == hotkeys.SETUP_CODE_MAX_SOUNDS
     assert data["s"][0] == "s0"
 
 
