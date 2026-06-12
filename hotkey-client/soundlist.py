@@ -24,33 +24,35 @@ def fetch_sounds(
     None — не получилось (бот офлайн/старый, вебхук умер) — вызывающий
     использует фолбэк из setup-кода. Сетевые исключения не пробрасываются.
     """
-    try:
-        resp = requests.post(
-            webhook_url,
-            params={"wait": "true"},
-            json={"username": f"{token} {LIST_COMMAND}", "content": ZERO_WIDTH},
-            timeout=5,
-        )
-        resp.raise_for_status()
-        mid = resp.json()["id"]
-    except Exception:
-        return None
-
-    msg_url = f"{webhook_url}/messages/{mid}"
-    deadline = time.monotonic() + timeout
-    try:
-        while time.monotonic() < deadline:
-            time.sleep(poll_interval)
-            try:
-                data = requests.get(msg_url, timeout=5).json()
-            except Exception:
-                continue
-            embeds = data.get("embeds") or []
-            if embeds:
-                return parse_sound_list(embeds)
-        return None
-    finally:
+    with requests.Session() as session:
         try:
-            requests.delete(msg_url, timeout=5)
+            resp = session.post(
+                webhook_url,
+                params={"wait": "true"},
+                json={"username": f"{token} {LIST_COMMAND}", "content": ZERO_WIDTH},
+                timeout=5,
+            )
+            resp.raise_for_status()
+            mid = resp.json()["id"]
         except Exception:
-            pass
+            return None
+
+        msg_url = f"{webhook_url}/messages/{mid}"
+        deadline = time.monotonic() + timeout
+        try:
+            while time.monotonic() < deadline:
+                # sleep до первого GET — боту нужно время отредактировать сообщение
+                time.sleep(poll_interval)
+                try:
+                    data = session.get(msg_url, timeout=5).json()
+                except Exception:
+                    continue
+                embeds = data.get("embeds") or []
+                if embeds:
+                    return parse_sound_list(embeds)
+            return None
+        finally:
+            try:
+                session.delete(msg_url, timeout=5)
+            except Exception:
+                pass

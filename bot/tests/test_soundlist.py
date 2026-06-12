@@ -36,6 +36,20 @@ class _Resp:
         return self._payload
 
 
+def _fake_session_cls(post=None, get=None, delete=None):
+    class _S:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    _S.post = staticmethod(post or (lambda *a, **k: _Resp({})))
+    _S.get = staticmethod(get or (lambda *a, **k: _Resp({})))
+    _S.delete = staticmethod(delete or (lambda *a, **k: _Resp({})))
+    return _S
+
+
 def test_fetch_happy_path(monkeypatch) -> None:
     sl = _load()
     deleted = []
@@ -50,10 +64,12 @@ def test_fetch_happy_path(monkeypatch) -> None:
         assert url.endswith("/messages/123")
         return _Resp({"embeds": [{"description": "жыр\nлол"}]})
 
-    monkeypatch.setattr(sl.requests, "post", fake_post)
-    monkeypatch.setattr(sl.requests, "get", fake_get)
+    def fake_delete(url, timeout=None):
+        deleted.append(url)
+        return _Resp({})
+
     monkeypatch.setattr(
-        sl.requests, "delete", lambda url, timeout=None: deleted.append(url) or _Resp({})
+        sl.requests, "Session", _fake_session_cls(post=fake_post, get=fake_get, delete=fake_delete)
     )
     monkeypatch.setattr(sl.time, "sleep", lambda _s: None)
 
@@ -65,12 +81,19 @@ def test_fetch_happy_path(monkeypatch) -> None:
 def test_fetch_timeout_returns_none(monkeypatch) -> None:
     sl = _load()
     deleted = []
-    monkeypatch.setattr(sl.requests, "post", lambda *a, **k: _Resp({"id": "1"}))
-    monkeypatch.setattr(sl.requests, "get", lambda *a, **k: _Resp({"embeds": []}))
+
     monkeypatch.setattr(
-        sl.requests, "delete", lambda *a, **k: deleted.append(1) or _Resp({})
+        sl.requests,
+        "Session",
+        _fake_session_cls(
+            post=lambda *a, **k: _Resp({"id": "1"}),
+            get=lambda *a, **k: _Resp({"embeds": []}),
+            delete=lambda *a, **k: deleted.append(1) or _Resp({}),
+        ),
     )
     monkeypatch.setattr(sl.time, "sleep", lambda _s: None)
+    times = iter([0.0, 0.01, 0.02, 0.03, 9.9])  # последнее значение выбивает дедлайн
+    monkeypatch.setattr(sl.time, "monotonic", lambda: next(times))
     assert sl.fetch_sounds("https://hook", "tok", timeout=0.05, poll_interval=0.01) is None
     assert deleted  # подчистили сообщение даже при таймауте
 
@@ -81,5 +104,21 @@ def test_fetch_post_failure_returns_none(monkeypatch) -> None:
     def boom(*a, **k):
         raise OSError("network down")
 
-    monkeypatch.setattr(sl.requests, "post", boom)
+    monkeypatch.setattr(sl.requests, "Session", _fake_session_cls(post=boom))
     assert sl.fetch_sounds("https://hook", "tok") is None
+
+
+def test_fetch_get_returns_error_payload_gives_none(monkeypatch) -> None:
+    sl = _load()
+    monkeypatch.setattr(
+        sl.requests,
+        "Session",
+        _fake_session_cls(
+            post=lambda *a, **k: _Resp({"id": "99"}),
+            get=lambda *a, **k: _Resp({"code": 10008, "message": "Unknown Message"}),
+        ),
+    )
+    monkeypatch.setattr(sl.time, "sleep", lambda _s: None)
+    times = iter([0.0, 0.01, 0.02, 9.9])
+    monkeypatch.setattr(sl.time, "monotonic", lambda: next(times))
+    assert sl.fetch_sounds("https://hook", "tok", timeout=1.0) is None
