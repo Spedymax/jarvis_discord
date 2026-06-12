@@ -56,6 +56,43 @@ SETUP_CODE_MAX_SOUNDS = 100  # верхний cap по количеству; б�
 # валидируются ^\S{1,30}$ — коллизия с реальным звуком невозможна.
 STOP_COMMAND = "stop sound"
 
+# Зарезервированная команда «список звуков» (тот же принцип, что STOP_COMMAND).
+LIST_COMMAND = "list sounds"
+
+SOUND_LIST_CHUNK_CHARS = 4096  # лимит Discord на description одного embed
+SOUND_LIST_TOTAL_CHARS = 6000  # лимит Discord на сумму embeds сообщения
+
+
+def chunk_sound_list(
+    names: list[str],
+    chunk_chars: int = SOUND_LIST_CHUNK_CHARS,
+    total_chars: int = SOUND_LIST_TOTAL_CHARS,
+) -> list[str]:
+    """Имена (по play_count DESC) → строки для embed.description.
+
+    Чанк ≤ chunk_chars, сумма ≤ total_chars; не влезающий хвост отбрасывается.
+    """
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    total = 0
+    for name in names:
+        sep = 1 if current else 0  # \n внутри чанка
+        if current_len + sep + len(name) > chunk_chars:
+            if current:
+                chunks.append("\n".join(current))
+            current = []
+            current_len = 0
+            sep = 0
+        if total + sep + len(name) > total_chars:
+            break
+        current.append(name)
+        current_len += sep + len(name)
+        total += sep + len(name)
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
 
 def encode_setup_code(
     token: str,

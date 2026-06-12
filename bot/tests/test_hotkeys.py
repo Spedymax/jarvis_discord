@@ -107,3 +107,28 @@ def test_encode_setup_code_max_chars_never_drops_token() -> None:
     data = json.loads(base64.urlsafe_b64decode(code[len("JHK1."):]))
     assert data["t"] == "tok"
     assert data["s"] == []
+
+
+def test_chunk_sound_list_single_chunk() -> None:
+    assert hotkeys.chunk_sound_list(["a", "b", "c"]) == ["a\nb\nc"]
+
+
+def test_chunk_sound_list_empty() -> None:
+    assert hotkeys.chunk_sound_list([]) == []
+
+
+def test_chunk_sound_list_splits_at_chunk_limit() -> None:
+    names = ["x" * 30] * 10
+    chunks = hotkeys.chunk_sound_list(names, chunk_chars=70, total_chars=10_000)
+    assert all(len(c) <= 70 for c in chunks)
+    flat = [n for c in chunks for n in c.split("\n")]
+    assert flat == names  # на чанк-лимите ничего не теряем
+
+
+def test_chunk_sound_list_drops_tail_over_total() -> None:
+    names = [f"s{i:02d}" for i in range(100)]  # по 3 символа
+    chunks = hotkeys.chunk_sound_list(names, chunk_chars=50, total_chars=100)
+    flat = [n for c in chunks for n in c.split("\n")]
+    assert 0 < len(flat) < 100
+    assert flat == names[: len(flat)]  # отбрасывается только хвост
+    assert sum(len(c) for c in chunks) <= 100
