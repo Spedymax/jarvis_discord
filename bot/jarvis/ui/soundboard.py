@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import unicodedata
 
 import discord
 
@@ -18,9 +17,24 @@ def _trim(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+# Только SMP-блоки эмодзи (🔥😀🎵…): в них всё валидно для поля emoji кнопки.
+# BMP-символы (♪, →, ™, и даже ⚽/✅ из смешанных блоков 2600–27BF) Discord
+# в emoji-слоте принимает выборочно (400 Invalid emoji) — оставляем их в label,
+# где они отображаются так же.
+_EMOJI_RANGES = (
+    (0x1F1E6, 0x1F1FF),  # regional indicators
+    (0x1F300, 0x1F5FF),  # symbols & pictographs
+    (0x1F600, 0x1F64F),  # emoticons
+    (0x1F680, 0x1F6FF),  # transport & map
+    (0x1F900, 0x1F9FF),  # supplemental symbols
+    (0x1FA70, 0x1FAFF),  # extended-A
+)
+
+
 def _is_emoji_char(ch: str) -> bool:
-    """Approximate emoji detection via unicodedata category."""
-    return unicodedata.category(ch) in ("So", "Sk", "Sm")
+    """True только для кодпоинтов из однозначных emoji-блоков (SMP)."""
+    cp = ord(ch)
+    return any(lo <= cp <= hi for lo, hi in _EMOJI_RANGES)
 
 
 def _split_emoji(name: str) -> tuple[str | None, str]:
