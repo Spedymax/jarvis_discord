@@ -198,3 +198,9 @@ def test_filter_sounds_limit_and_no_match() -> None:
     names = [f"звук{i}" for i in range(20)]
     assert core.filter_sounds("звук", names, limit=5) == names[:5]
     assert core.filter_sounds("нету", names) == []
+
+
+def test_filter_sounds_empty_names() -> None:
+    core = _load_core()
+    assert core.filter_sounds("x", []) == []
+    assert core.filter_sounds("", []) == []

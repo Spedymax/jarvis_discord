@@ -22,6 +22,7 @@ GREEN_BG = "#1e3329"
 YELLOW = "#f0b232"
 YELLOW_BG = "#3a3225"
 RED = "#da373c"
+RED_BG = "#42252a"
 KBD = "#949cf7"
 TEXT = "#dbdee1"
 MUTED = "#949ba4"
@@ -48,6 +49,7 @@ class SetupWindow(ctk.CTk):
         self._mods: set[str] = set()
         self._pending_combo: str | None = None
         self._fetching = False
+        self._hide_job = None
 
         self._build_code_section()
         self._build_constructor_section()
@@ -115,7 +117,7 @@ class SetupWindow(ctk.CTk):
                                          fg_color=BTN, hover_color=BTN_HOVER,
                                          command=self._start_capture)
         self.capture_btn.pack(side="left")
-        self.combo_label = ctk.CTkLabel(add_row, text="—", width=130,
+        self.combo_label = ctk.CTkLabel(add_row, text="—", width=160,
                                         font=self._mono, text_color=KBD,
                                         fg_color=INPUT, corner_radius=4)
         self.combo_label.pack(side="left", padx=8)
@@ -126,7 +128,7 @@ class SetupWindow(ctk.CTk):
         self.sound_entry.bind("<KeyRelease>", lambda _e: self._update_suggestions())
         self.sound_entry.bind("<FocusIn>", lambda _e: self._update_suggestions())
         # отложенно: клик по подсказке должен успеть сработать до сворачивания
-        self.sound_entry.bind("<FocusOut>", lambda _e: self.after(200, self._hide_suggestions))
+        self.sound_entry.bind("<FocusOut>", lambda _e: self._schedule_hide())
         self.sound_entry.bind("<Escape>", lambda _e: self._hide_suggestions())
         self.refresh_btn = ctk.CTkButton(add_row, text="⟳", width=32,
                                          fg_color=BTN, hover_color=BTN_HOVER,
@@ -159,7 +161,7 @@ class SetupWindow(ctk.CTk):
     def _update_suggestions(self) -> None:
         query = self.sound_entry.get().strip()
         items: list[str] = []
-        if not query or query.lower() in setup_core.STOP_LABEL.lower():
+        if not query:
             items.append(setup_core.STOP_LABEL)
         items += setup_core.filter_sounds(query, self._sounds)
         for child in self.suggest_frame.winfo_children():
@@ -173,13 +175,25 @@ class SetupWindow(ctk.CTk):
                 fg_color="transparent", hover_color=ROW_HOVER, text_color=TEXT,
                 command=lambda n=name: self._pick_suggestion(n),
             ).pack(fill="x", padx=4, pady=1)
-        self.suggest_frame.pack(fill="x", padx=12, pady=(0, 4),
-                                before=self.warn_label)
+        if not self.suggest_frame.winfo_ismapped():
+            self.suggest_frame.pack(fill="x", padx=12, pady=(0, 4),
+                                    before=self.warn_label)
+
+    def _schedule_hide(self) -> None:
+        self._cancel_hide()
+        self._hide_job = self.after(350, self._hide_suggestions)
+
+    def _cancel_hide(self) -> None:
+        if self._hide_job is not None:
+            self.after_cancel(self._hide_job)
+            self._hide_job = None
 
     def _hide_suggestions(self) -> None:
+        self._hide_job = None
         self.suggest_frame.pack_forget()
 
     def _pick_suggestion(self, name: str) -> None:
+        self._cancel_hide()
         self.sound_entry.delete(0, "end")
         self.sound_entry.insert(0, name)
         self._hide_suggestions()
@@ -215,11 +229,11 @@ class SetupWindow(ctk.CTk):
         token, webhook = self._token, self._webhook
 
         def worker() -> None:
-            names = soundlist.fetch_sounds(webhook, token)
             try:
+                names = soundlist.fetch_sounds(webhook, token)
                 self.after(0, self._apply_fetched_sounds, names, token)
             except Exception:
-                pass  # окно уже закрыто (RuntimeError: main thread is not in main loop)
+                pass  # окно закрыто или fetch неожиданно упал
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -354,7 +368,7 @@ class SetupWindow(ctk.CTk):
             name = ctk.CTkLabel(row, text=shown, anchor="w", text_color=TEXT)
             name.pack(side="left", fill="x", expand=True, pady=5)
             x_btn = ctk.CTkButton(row, text="✕", width=28, fg_color="transparent",
-                                  hover_color="#42252a", text_color=MUTED,
+                                  hover_color=RED_BG, text_color=MUTED,
                                   command=lambda c=combo: self._remove_binding(c))
             x_btn.pack(side="right", padx=6)
 
@@ -366,7 +380,7 @@ class SetupWindow(ctk.CTk):
                 r.configure(fg_color=ROW)
                 b.configure(text_color=MUTED)
 
-            for w in (row, kbd, name):
+            for w in (row, kbd, name, x_btn):
                 w.bind("<Enter>", _on_enter)
                 w.bind("<Leave>", _on_leave)
 

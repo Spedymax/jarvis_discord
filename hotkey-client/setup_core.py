@@ -45,6 +45,8 @@ def filter_sounds(query: str, names: list[str], limit: int = 8) -> list[str]:
 
     Пустой/пробельный query → первые limit имён (names уже по play_count DESC).
     """
+    if not names:
+        return []
     q = query.strip().lower()
     if not q:
         return list(names[:limit])
