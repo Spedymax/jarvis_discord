@@ -29,15 +29,16 @@ CLIENT_EXE_URL = (
     "https://github.com/Spedymax/jarvis_discord/releases/download/"
     "hotkey-client-latest/jarvis-hotkeys.exe"
 )
-MAX_SETUP_CODE_CHARS = 1400  # ~500 символов шаблона + запас до лимита Discord 2000
+# Код уходит отдельным сообщением: почти весь лимит Discord 2000 — под него
+# (минус ``` обрамление и небольшой запас).
+MAX_SETUP_CODE_CHARS = 1900
 
 SETUP_INSTRUCTIONS = (
     "**Хоткеи саундборда**\n"
     "1. Скачай клиент: " + CLIENT_EXE_URL + "\n"
     "2. Запусти. SmartScreen ругнётся на неподписанный exe — "
     "«Подробнее → Выполнить в любом случае» (один раз).\n"
-    "3. В открывшемся окне вставь setup-код:\n"
-    "```{code}```\n"
+    "3. В открывшемся окне вставь setup-код из следующего сообщения.\n"
     "Дальше окно само ведёт: жмёшь комбинацию → выбираешь звук → «Сохранить».\n"
     "Код личный (внутри твой токен) — не делись им. Новые звуки в выпадашке — "
     "перегенерь код через `/hotkey setup`. Сбросить доступ: `/hotkey revoke`."
@@ -100,10 +101,8 @@ class HotkeysCog(commands.Cog):
         sounds = await db.list_sounds(interaction.guild.id)
         names = [s.name for s in sounds]
         code = encode_setup_code(token, webhook_url, names, max_chars=MAX_SETUP_CODE_CHARS)
-        await interaction.followup.send(
-            SETUP_INSTRUCTIONS.format(code=code),
-            ephemeral=True,
-        )
+        await interaction.followup.send(SETUP_INSTRUCTIONS, ephemeral=True)
+        await interaction.followup.send(f"```{code}```", ephemeral=True)
 
     @hotkey.command(name="revoke", description="Отозвать свой токен хоткеев.")
     async def revoke_cmd(self, interaction: discord.Interaction) -> None:
