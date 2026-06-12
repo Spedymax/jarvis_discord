@@ -55,6 +55,7 @@ class HotkeysCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.throttle = Throttle(min_interval=THROTTLE_INTERVAL)
+        self._cleanup_tasks: set[asyncio.Task] = set()
 
     async def _ensure_service_channel(
         self, guild: discord.Guild
@@ -85,11 +86,13 @@ class HotkeysCog(commands.Cog):
         await db.set_hotkey_channel(guild.id, channel.id, webhook.url)
         return channel.id, webhook.url
 
-    async def _send_sound_list(self, message: discord.Message, webhook_url: str) -> bool:
+    async def _send_sound_list(
+        self, message: discord.Message, guild_id: int, webhook_url: str
+    ) -> bool:
         """Ответ на LIST_COMMAND: вписывает имена звуков в embeds этого же
         сообщения (клиент поллит его и удалит сам). True — сообщение оставить;
         страховка от умершего клиента — отложенное удаление."""
-        sounds = await db.list_sounds(message.guild.id)
+        sounds = await db.list_sounds(guild_id)
         chunks = chunk_sound_list([s.name for s in sounds]) or [EMPTY_LIST_MARKER]
         embeds = [discord.Embed(description=c) for c in chunks]
         try:
@@ -103,10 +106,12 @@ class HotkeysCog(commands.Cog):
             await asyncio.sleep(30)
             try:
                 await message.delete()
-            except Exception:
-                pass
+            except discord.HTTPException:
+                pass  # клиент уже удалил (NotFound) или нет прав — не критично
 
-        asyncio.create_task(_cleanup())
+        task = asyncio.create_task(_cleanup())
+        self._cleanup_tasks.add(task)
+        task.add_done_callback(self._cleanup_tasks.discard)
         return True
 
     @hotkey.command(name="setup", description="Получить токен и настроить хоткеи.")
@@ -170,7 +175,7 @@ class HotkeysCog(commands.Cog):
             if is_list:
                 # member в войсе не нужен — настраиваться можно без войса;
                 # гильдия известна из служебного канала
-                keep_message = await self._send_sound_list(message, settings[1])
+                keep_message = await self._send_sound_list(message, message.guild.id, settings[1])
                 return
             member = find_member_in_voice(self.bot, user_id)
             if member is None:
