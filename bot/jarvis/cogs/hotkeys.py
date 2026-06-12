@@ -1,6 +1,7 @@
 """Hotkey feature: token issuance, service channel, webhook listener."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import time
@@ -11,9 +12,12 @@ from discord.ext import commands
 
 from .. import db, state
 from ..hotkeys import (
+    EMPTY_LIST_MARKER,
+    LIST_COMMAND,
     STOP_COMMAND,
     TOKEN_NBYTES,
     Throttle,
+    chunk_sound_list,
     encode_setup_code,
     find_member_in_voice,
     parse_payload,
@@ -81,6 +85,30 @@ class HotkeysCog(commands.Cog):
         await db.set_hotkey_channel(guild.id, channel.id, webhook.url)
         return channel.id, webhook.url
 
+    async def _send_sound_list(self, message: discord.Message, webhook_url: str) -> bool:
+        """Ответ на LIST_COMMAND: вписывает имена звуков в embeds этого же
+        сообщения (клиент поллит его и удалит сам). True — сообщение оставить;
+        страховка от умершего клиента — отложенное удаление."""
+        sounds = await db.list_sounds(message.guild.id)
+        chunks = chunk_sound_list([s.name for s in sounds]) or [EMPTY_LIST_MARKER]
+        embeds = [discord.Embed(description=c) for c in chunks]
+        try:
+            webhook = discord.Webhook.from_url(webhook_url, client=self.bot)
+            await webhook.edit_message(message.id, embeds=embeds)
+        except Exception:
+            log.exception("Failed to publish sound list")
+            return False  # сообщение удалится сразу, клиент уйдёт в фолбэк
+
+        async def _cleanup() -> None:
+            await asyncio.sleep(30)
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+        asyncio.create_task(_cleanup())
+        return True
+
     @hotkey.command(name="setup", description="Получить токен и настроить хоткеи.")
     async def setup_cmd(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -120,7 +148,8 @@ class HotkeysCog(commands.Cog):
         if settings is None or message.channel.id != settings[0]:
             return
 
-        # always clean up the service message, whatever happens next
+        # list-ответ остаётся до прочтения клиентом, остальные служебные сообщения удаляем сразу
+        keep_message = False
         try:
             parsed = parse_payload(message.author.name)
             if parsed is None:
@@ -131,8 +160,17 @@ class HotkeysCog(commands.Cog):
                 return
             normalized = sound_name.strip().lower()
             is_stop = normalized == STOP_COMMAND
-            # стоп не троттлим: «play и тут же stop» должен срабатывать
-            if not is_stop and not self.throttle.allow(str(user_id), now=time.monotonic()):
+            is_list = normalized == LIST_COMMAND
+            # служебные команды не троттлим: stop должен срабатывать сразу
+            # после play, list — редкий запрос из GUI
+            if not (is_stop or is_list) and not self.throttle.allow(
+                str(user_id), now=time.monotonic()
+            ):
+                return
+            if is_list:
+                # member в войсе не нужен — настраиваться можно без войса;
+                # гильдия известна из служебного канала
+                keep_message = await self._send_sound_list(message, settings[1])
                 return
             member = find_member_in_voice(self.bot, user_id)
             if member is None:
@@ -157,10 +195,11 @@ class HotkeysCog(commands.Cog):
         except Exception:
             log.exception("hotkey message handling failed")
         finally:
-            try:
-                await message.delete()
-            except Exception:
-                pass
+            if not keep_message:
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
 
 
 async def setup(bot: commands.Bot) -> None:
