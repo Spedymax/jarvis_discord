@@ -119,8 +119,6 @@ class SetupWindow(ctk.CTk):
             values=[setup_core.STOP_LABEL]
             + (self._sounds or ["(звуков нет — впиши имя)"])
         )
-        self.code_hint.configure(text=f"✓ Код принят. Звуков: {len(self._sounds)}",
-                                 text_color="#41e07a")
         self._refresh_save_state()
         self.refresh_btn.configure(state="normal")
         self._refresh_sounds()
@@ -132,20 +130,25 @@ class SetupWindow(ctk.CTk):
             return
         self._fetching = True
         self.refresh_btn.configure(state="disabled")
-        self.code_hint.configure(text="Загружаю список звуков…", text_color="gray")
+        self.code_hint.configure(text="✓ Код принят. Загружаю список звуков…", text_color="gray")
         token, webhook = self._token, self._webhook
 
         def worker() -> None:
             names = soundlist.fetch_sounds(webhook, token)
             try:
-                self.after(0, self._apply_fetched_sounds, names)
+                self.after(0, self._apply_fetched_sounds, names, token)
             except Exception:
-                pass  # окно уже закрыто
+                pass  # окно уже закрыто (RuntimeError: main thread is not in main loop)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _apply_fetched_sounds(self, names: list | None) -> None:
+    def _apply_fetched_sounds(self, names: list | None, fetch_token: str) -> None:
         self._fetching = False
+        if fetch_token != self._token:
+            # результат устаревшего запроса (код сменили во время fetch'а) —
+            # отбрасываем и перезапрашиваем уже с актуальным токеном
+            self._refresh_sounds()
+            return
         self.refresh_btn.configure(state="normal")
         if names is None:
             self.code_hint.configure(
