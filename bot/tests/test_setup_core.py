@@ -177,3 +177,24 @@ def test_empty_list_marker_matches_bot_and_cannot_be_sound_name() -> None:
     assert core.EMPTY_LIST_MARKER == bot_hotkeys.EMPTY_LIST_MARKER
     assert " " in core.EMPTY_LIST_MARKER
     assert re.match(r"^\S{1,30}$", core.EMPTY_LIST_MARKER) is None
+
+
+def test_filter_sounds_substring_case_insensitive() -> None:
+    core = _load_core()
+    names = ["Жыр", "лол", "пожар", "сос"]
+    assert core.filter_sounds("жы", names) == ["Жыр"]
+    assert core.filter_sounds("ЖАР", names) == ["пожар"]
+
+
+def test_filter_sounds_empty_query_returns_top() -> None:
+    core = _load_core()
+    names = [f"s{i}" for i in range(20)]
+    assert core.filter_sounds("", names) == names[:8]
+    assert core.filter_sounds("  ", names, limit=3) == names[:3]
+
+
+def test_filter_sounds_limit_and_no_match() -> None:
+    core = _load_core()
+    names = [f"звук{i}" for i in range(20)]
+    assert core.filter_sounds("звук", names, limit=5) == names[:5]
+    assert core.filter_sounds("нету", names) == []

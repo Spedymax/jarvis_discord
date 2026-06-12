@@ -40,6 +40,17 @@ def parse_sound_list(embeds: list) -> list[str]:
     return names
 
 
+def filter_sounds(query: str, names: list[str], limit: int = 8) -> list[str]:
+    """Подстрочный case-insensitive фильтр для подсказок поиска в визарде.
+
+    Пустой/пробельный query → первые limit имён (names уже по play_count DESC).
+    """
+    q = query.strip().lower()
+    if not q:
+        return list(names[:limit])
+    return [n for n in names if q in n.lower()][:limit]
+
+
 MODIFIER_ORDER = ("ctrl", "alt", "shift", "cmd")
 
 # pynput Key.name -> canonical modifier
