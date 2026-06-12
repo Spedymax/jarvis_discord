@@ -1,10 +1,13 @@
 """GUI setup wizard (customtkinter). All decisions live in setup_core."""
 from __future__ import annotations
 
+import threading
+
 import customtkinter as ctk
 from pynput import keyboard
 
 import setup_core
+import soundlist
 
 ACCENT = "#ff9933"  # цвет карточки now-playing
 
@@ -24,6 +27,7 @@ class SetupWindow(ctk.CTk):
         self._listener: keyboard.Listener | None = None
         self._mods: set[str] = set()
         self._pending_combo: str | None = None
+        self._fetching = False
 
         self._build_code_section()
         self._build_bindings_section()
@@ -38,6 +42,9 @@ class SetupWindow(ctk.CTk):
             )
             self._refresh_rows()
             self._refresh_save_state()
+            if self._token and self._webhook:
+                self.refresh_btn.configure(state="normal")
+                self._refresh_sounds()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -73,6 +80,10 @@ class SetupWindow(ctk.CTk):
         self.sound_box = ctk.CTkComboBox(add_row, values=[setup_core.STOP_LABEL], width=170)
         self.sound_box.set(setup_core.STOP_LABEL)
         self.sound_box.pack(side="left", padx=8)
+        self.refresh_btn = ctk.CTkButton(add_row, text="⟳", width=32,
+                                         command=self._refresh_sounds,
+                                         state="disabled")
+        self.refresh_btn.pack(side="left", padx=(0, 8))
         self.add_btn = ctk.CTkButton(add_row, text="Добавить", width=90,
                                      command=self._add_binding, state="disabled")
         self.add_btn.pack(side="left")
@@ -111,6 +122,43 @@ class SetupWindow(ctk.CTk):
         self.code_hint.configure(text=f"✓ Код принят. Звуков: {len(self._sounds)}",
                                  text_color="#41e07a")
         self._refresh_save_state()
+        self.refresh_btn.configure(state="normal")
+        self._refresh_sounds()
+
+    # ---------- live sound list ----------
+
+    def _refresh_sounds(self) -> None:
+        if self._fetching or not (self._token and self._webhook):
+            return
+        self._fetching = True
+        self.refresh_btn.configure(state="disabled")
+        self.code_hint.configure(text="Загружаю список звуков…", text_color="gray")
+        token, webhook = self._token, self._webhook
+
+        def worker() -> None:
+            names = soundlist.fetch_sounds(webhook, token)
+            try:
+                self.after(0, self._apply_fetched_sounds, names)
+            except Exception:
+                pass  # окно уже закрыто
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_fetched_sounds(self, names: list | None) -> None:
+        self._fetching = False
+        self.refresh_btn.configure(state="normal")
+        if names is None:
+            self.code_hint.configure(
+                text=f"⚠ Бот не ответил — список из кода ({len(self._sounds)} звуков).",
+                text_color="#e0c341",
+            )
+            return
+        self._sounds = names
+        self.sound_box.configure(
+            values=[setup_core.STOP_LABEL]
+            + (self._sounds or ["(звуков нет — впиши имя)"])
+        )
+        self.code_hint.configure(text=f"✓ Звуков: {len(names)}", text_color="#41e07a")
 
     # ---------- combo capture ----------
 
