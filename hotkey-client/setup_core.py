@@ -19,22 +19,26 @@ STOP_LABEL = "⏹ Остановить звук"  # отображение в GU
 # равенство зафиксировано кросс-тестом.
 LIST_COMMAND = "list sounds"
 
+# Дублируется с bot/jarvis/hotkeys.py::EMPTY_LIST_MARKER; кросс-тест фиксирует.
+EMPTY_LIST_MARKER = "нет звуков"
+
 ZERO_WIDTH = "​"  # content вебхук-сообщений (невидимый, но непустой)
 
 
 def parse_sound_list(embeds: list) -> list[str]:
     """Discord-embeds JSON → плоский список имён (по строке на имя).
 
-    «—» — маркер пустого списка от бота, отфильтровывается.
+    «нет звуков» — маркер пустого списка от бота, отфильтровывается.
     """
     names: list[str] = []
     for embed in embeds or []:
         desc = (embed or {}).get("description") or ""
         for line in desc.split("\n"):
             line = line.strip()
-            if line and line != "—":
+            if line and line != EMPTY_LIST_MARKER:
                 names.append(line)
     return names
+
 
 MODIFIER_ORDER = ("ctrl", "alt", "shift", "cmd")
 

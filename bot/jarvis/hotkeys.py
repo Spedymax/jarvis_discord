@@ -59,6 +59,10 @@ STOP_COMMAND = "stop sound"
 # Зарезервированная команда «список звуков» (тот же принцип, что STOP_COMMAND).
 LIST_COMMAND = "list sounds"
 
+# Маркер «звуков нет» в ответе на LIST_COMMAND: содержит пробел — именем
+# звука быть не может (как и команды выше).
+EMPTY_LIST_MARKER = "нет звуков"
+
 SOUND_LIST_CHUNK_CHARS = 4096  # лимит Discord на description одного embed
 SOUND_LIST_TOTAL_CHARS = 6000  # лимит Discord на сумму embeds сообщения
 
@@ -84,6 +88,8 @@ def chunk_sound_list(
             current = []
             current_len = 0
             sep = 0
+        if len(name) > chunk_chars:
+            continue  # одиночное имя сверх лимита — пропускаем, не ломая инвариант
         if total + sep + len(name) > total_chars:
             break
         current.append(name)

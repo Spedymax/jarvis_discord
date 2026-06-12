@@ -132,3 +132,10 @@ def test_chunk_sound_list_drops_tail_over_total() -> None:
     assert 0 < len(flat) < 100
     assert flat == names[: len(flat)]  # отбрасывается только хвост
     assert sum(len(c) for c in chunks) <= 100
+
+
+def test_chunk_sound_list_skips_oversized_name() -> None:
+    chunks = hotkeys.chunk_sound_list(["ok", "x" * 100, "fine"], chunk_chars=50, total_chars=1000)
+    flat = [n for c in chunks for n in c.split("\n")]
+    assert flat == ["ok", "fine"]
+    assert all(len(c) <= 50 for c in chunks)

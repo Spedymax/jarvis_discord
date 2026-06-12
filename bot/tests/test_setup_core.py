@@ -162,7 +162,7 @@ def test_parse_sound_list_multi_embed() -> None:
 def test_parse_sound_list_empty_inputs() -> None:
     core = _load_core()
     assert core.parse_sound_list([]) == []
-    assert core.parse_sound_list([{"description": "—"}]) == []  # маркер пустого списка
+    assert core.parse_sound_list([{"description": "нет звуков"}]) == []
     assert core.parse_sound_list([{"description": ""}]) == []
     assert core.parse_sound_list([{}]) == []
 
@@ -170,3 +170,10 @@ def test_parse_sound_list_empty_inputs() -> None:
 def test_zero_width_exported() -> None:
     core = _load_core()
     assert core.ZERO_WIDTH == "​"
+
+
+def test_empty_list_marker_matches_bot_and_cannot_be_sound_name() -> None:
+    core = _load_core()
+    assert core.EMPTY_LIST_MARKER == bot_hotkeys.EMPTY_LIST_MARKER
+    assert " " in core.EMPTY_LIST_MARKER
+    assert re.match(r"^\S{1,30}$", core.EMPTY_LIST_MARKER) is None
