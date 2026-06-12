@@ -233,7 +233,12 @@ class SetupWindow(ctk.CTk):
                 names = soundlist.fetch_sounds(webhook, token)
                 self.after(0, self._apply_fetched_sounds, names, token)
             except Exception:
-                pass  # окно закрыто или fetch неожиданно упал
+                # fetch неожиданно упал — роутим в None-фолбэк, чтобы
+                # _fetching не залип и кнопка ⟳ не осталась выключенной
+                try:
+                    self.after(0, self._apply_fetched_sounds, None, token)
+                except Exception:
+                    pass  # окно уже закрыто
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -405,6 +410,7 @@ class SetupWindow(ctk.CTk):
         self._on_close()
 
     def _on_close(self) -> None:
+        self._cancel_hide()
         if self._listener is not None:
             self._listener.stop()
             self._listener = None
