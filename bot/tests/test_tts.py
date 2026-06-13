@@ -45,3 +45,28 @@ def test_cleanup_old_tts_removes_stale_keeps_fresh(tmp_path, monkeypatch) -> Non
 def test_cleanup_old_tts_missing_dir_is_noop(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(tts_mod, "TTS_DIR", tmp_path / "does_not_exist")
     tts_mod._cleanup_old_tts()  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_synthesize_uses_voice_and_saves(tmp_path, monkeypatch) -> None:
+    saved = {}
+
+    class FakeCommunicate:
+        def __init__(self, text, voice):
+            saved["text"] = text
+            saved["voice"] = voice
+
+        async def save(self, dest):
+            saved["dest"] = dest
+            Path(dest).write_bytes(b"fake-mp3")
+
+    fake_edge = MagicMock()
+    fake_edge.Communicate = FakeCommunicate
+    monkeypatch.setitem(__import__("sys").modules, "edge_tts", fake_edge)
+
+    dest = tmp_path / "out.mp3"
+    await tts_mod._synthesize("привет", dest)
+
+    assert saved["text"] == "привет"
+    assert saved["voice"] == tts_mod.TTS_VOICE
+    assert dest.read_bytes() == b"fake-mp3"

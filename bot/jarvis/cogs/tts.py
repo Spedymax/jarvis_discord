@@ -47,3 +47,11 @@ def _cleanup_old_tts() -> None:
                 f.unlink(missing_ok=True)
         except OSError:
             log.warning("Failed to clean TTS temp file %s", f, exc_info=True)
+
+
+async def _synthesize(text: str, dest: Path) -> None:
+    """Synthesize text to an mp3 file via edge-tts. Raises on failure."""
+    import edge_tts  # lazy import so dev installs without it still load other cogs
+
+    communicate = edge_tts.Communicate(text, TTS_VOICE)
+    await communicate.save(str(dest))
