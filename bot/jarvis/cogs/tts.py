@@ -34,3 +34,16 @@ def _validate_text(text: str) -> str:
     if len(cleaned) > MAX_TEXT_LEN:
         raise TtsError(f"Слишком длинно — максимум {MAX_TEXT_LEN} символов.")
     return cleaned
+
+
+def _cleanup_old_tts() -> None:
+    """Remove TTS temp files older than the TTL. Best-effort, never raises."""
+    if not TTS_DIR.exists():
+        return
+    cutoff = time.time() - TTS_FILE_TTL_SECONDS
+    for f in TTS_DIR.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink(missing_ok=True)
+        except OSError:
+            log.warning("Failed to clean TTS temp file %s", f, exc_info=True)
