@@ -86,3 +86,48 @@ async def play_tts_core(
         log.exception("Failed to set TTS volume")
     await gp.wl.play(track)
     return True
+
+
+class TtsCog(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        TTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    @app_commands.command(name="tts", description="Озвучить текст голосом в войсе.")
+    @app_commands.describe(text="Что сказать (до 200 символов)")
+    async def tts_cmd(self, interaction: discord.Interaction, text: str) -> None:
+        # Синтез > 3 сек дедлайна interaction — подтверждаем сразу.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        cleaned = _validate_text(text)  # TtsError → глобальный on_app_command_error
+
+        _cleanup_old_tts()
+        TTS_DIR.mkdir(parents=True, exist_ok=True)
+        dest = TTS_DIR / f"{uuid.uuid4().hex}.mp3"
+        try:
+            await _synthesize(cleaned, dest)
+        except Exception as exc:
+            dest.unlink(missing_ok=True)
+            log.exception("edge-tts synthesis failed")
+            raise TtsError("Не смог синтезировать речь, попробуй ещё раз.") from exc
+
+        try:
+            gp = await _ensure_voice(interaction)
+        except JarvisError as e:
+            dest.unlink(missing_ok=True)
+            await interaction.followup.send(f"❌ {e.user_message}", ephemeral=True)
+            return
+
+        requester_name = getattr(interaction.user, "display_name", "—")
+        ok = await play_tts_core(gp, dest, requester_name)
+        if not ok:
+            dest.unlink(missing_ok=True)
+            await interaction.followup.send(
+                "❌ Не удалось проиграть синтезированную речь.", ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(f"🗣 «{cleaned}»", ephemeral=True)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(TtsCog(bot))
