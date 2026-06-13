@@ -70,3 +70,47 @@ async def test_synthesize_uses_voice_and_saves(tmp_path, monkeypatch) -> None:
     assert saved["text"] == "привет"
     assert saved["voice"] == tts_mod.TTS_VOICE
     assert dest.read_bytes() == b"fake-mp3"
+
+
+@pytest.mark.asyncio
+async def test_play_tts_core_plays_at_full_volume(fake_player, monkeypatch) -> None:
+    fake_player.set_volume = AsyncMock()
+    fake_player.playing = False
+    gp = GuildPlayer(wl=fake_player)
+    fake_track = MagicMock()
+    monkeypatch.setattr(tts_mod, "_search_local", AsyncMock(return_value=fake_track))
+
+    ok = await tts_mod.play_tts_core(gp, Path("/tmp/x.mp3"), "Tester")
+
+    assert ok is True
+    assert gp.playing_sound is True
+    fake_player.set_volume.assert_awaited_once_with(100)
+    fake_player.play.assert_awaited_once_with(fake_track)
+    assert fake_track.requester_name == "Tester"
+
+
+@pytest.mark.asyncio
+async def test_play_tts_core_missing_file_returns_false(fake_player, monkeypatch) -> None:
+    gp = GuildPlayer(wl=fake_player)
+    monkeypatch.setattr(tts_mod, "_search_local", AsyncMock(return_value=None))
+    ok = await tts_mod.play_tts_core(gp, Path("/tmp/missing.mp3"), "Tester")
+    assert ok is False
+    fake_player.play.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_play_tts_core_captures_interrupted_music(fake_player, monkeypatch) -> None:
+    fake_player.set_volume = AsyncMock()
+    fake_player.playing = True
+    fake_player.position = 4321
+    fake_player.volume = 100
+    gp = GuildPlayer(wl=fake_player)
+    current = MagicMock()
+    gp.current_track = current
+    monkeypatch.setattr(tts_mod, "_search_local", AsyncMock(return_value=MagicMock()))
+
+    await tts_mod.play_tts_core(gp, Path("/tmp/x.mp3"), "Tester")
+
+    assert gp.interrupted_track is current
+    assert gp.interrupted_position_ms == 4321
+    assert gp.original_volume == 100

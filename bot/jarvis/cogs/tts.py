@@ -55,3 +55,34 @@ async def _synthesize(text: str, dest: Path) -> None:
 
     communicate = edge_tts.Communicate(text, TTS_VOICE)
     await communicate.save(str(dest))
+
+
+async def play_tts_core(
+    gp: GuildPlayer,
+    file_path: Path,
+    requester_name: str,
+) -> bool:
+    """Play a synthesized TTS file via the soundboard interrupt/resume path.
+
+    Sets gp.playing_sound / gp.interrupted_track so on_wavelink_track_end
+    restores the music afterwards. No DB writes. Returns False if Lavalink
+    cannot open the file.
+    """
+    track = await _search_local(file_path)
+    if track is None:
+        return False
+    track.requester_name = requester_name
+
+    if not gp.playing_sound:
+        gp.original_volume = int(getattr(gp.wl, "volume", 100) or 100)
+        if gp.wl.playing:
+            gp.interrupted_track = gp.current_track
+            gp.interrupted_position_ms = int(getattr(gp.wl, "position", 0) or 0)
+    gp.playing_sound = True
+    gp.cancel_idle_timer()
+    try:
+        await gp.wl.set_volume(100)
+    except Exception:
+        log.exception("Failed to set TTS volume")
+    await gp.wl.play(track)
+    return True
