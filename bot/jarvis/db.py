@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 _DB_PATH: Path | None = None
 
@@ -93,7 +93,8 @@ async def init_db(path: Path) -> None:
                 title      TEXT,
                 author     TEXT,
                 requester  TEXT,
-                played_at  INTEGER NOT NULL
+                played_at  INTEGER NOT NULL,
+                uri        TEXT
             )
             """
         )
@@ -116,6 +117,10 @@ async def init_db(path: Path) -> None:
             await conn.execute(
                 "ALTER TABLE sounds ADD COLUMN volume INTEGER NOT NULL DEFAULT 100"
             )
+        except aiosqlite.OperationalError:
+            pass  # column already exists
+        try:
+            await conn.execute("ALTER TABLE track_plays ADD COLUMN uri TEXT")
         except aiosqlite.OperationalError:
             pass  # column already exists
         await conn.execute(
@@ -307,13 +312,40 @@ async def get_role_perms(guild_id: int) -> dict[int, str]:
     return {int(r[0]): str(r[1]) for r in rows}
 
 
-async def record_track_play(guild_id: int, title, author, requester, played_at: int) -> None:
+async def record_track_play(guild_id: int, title, author, requester, played_at: int, uri=None) -> None:
     async with aiosqlite.connect(get_db_path()) as conn:
         await conn.execute(
-            "INSERT INTO track_plays (guild_id, title, author, requester, played_at) VALUES (?, ?, ?, ?, ?)",
-            (guild_id, title, author, requester, played_at),
+            "INSERT INTO track_plays (guild_id, title, author, requester, played_at, uri) VALUES (?, ?, ?, ?, ?, ?)",
+            (guild_id, title, author, requester, played_at, uri),
         )
         await conn.commit()
+
+
+async def recent_plays(guild_id: int, limit: int = 15) -> list[dict]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            """
+            SELECT title, author, requester, played_at, uri FROM track_plays
+            WHERE guild_id = ? ORDER BY played_at DESC, id DESC LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        rows = await cur.fetchall()
+    return [{"title": r[0], "author": r[1], "requester": r[2], "played_at": int(r[3]), "uri": r[4]} for r in rows]
+
+
+async def plays_by_day(guild_id: int, days: int = 14) -> list[dict]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            """
+            SELECT strftime('%Y-%m-%d', played_at, 'unixepoch') AS day, COUNT(*) AS plays
+            FROM track_plays WHERE guild_id = ?
+            GROUP BY day ORDER BY day DESC LIMIT ?
+            """,
+            (guild_id, days),
+        )
+        rows = await cur.fetchall()
+    return [{"date": r[0], "plays": int(r[1])} for r in reversed(rows)]
 
 
 async def top_tracks(guild_id: int, limit: int = 10) -> list[dict]:
