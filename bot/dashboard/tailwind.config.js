@@ -7,8 +7,6 @@ export default {
         bg: "#0e0f13", surface: "#16181d", card: "#1e2027", raised: "#262932",
         border: "#2a2d36", text: "#e7e9ee", muted: "#9aa0ad",
         accent: "#5865f2", accent2: "#7c5cff", green: "#23a55a", danger: "#f23f43",
-        // legacy tokens kept so un-restyled components still build mid-redesign:
-        discord: { bg: "#313338", card: "#2b2d31", dark: "#1e1f22", blurple: "#5865f2", green: "#23a55a", text: "#dbdee1", muted: "#949ba4" },
       },
       boxShadow: { panel: "0 4px 20px rgba(0,0,0,.35)" },
       borderRadius: { xl2: "16px" },
