@@ -1,0 +1,7 @@
+dashboard/node_modules
+dashboard/dist
+dashboard/*.tsbuildinfo
+.venv
+__pycache__
+*.pyc
+tests

@@ -1,3 +1,10 @@
+FROM node:20-slim AS frontend
+WORKDIR /build
+COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
+RUN npm ci
+COPY dashboard/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -22,6 +29,7 @@ RUN pip install --upgrade pip setuptools wheel \
     && pip install "discord.py[voice]>=2.4,<3" "wavelink>=3.4,<4" "aiosqlite>=0.20,<1" "python-dotenv>=1.0,<2" "pillow>=10,<12" "yt-dlp>=2024.10" "edge-tts>=6.1,<8" "sentry-sdk>=2,<3"
 
 COPY jarvis ./jarvis
+COPY --from=frontend /build/dist /app/web-static
 
 RUN mkdir -p /app/data /app/logs
 VOLUME ["/app/data", "/app/logs"]
