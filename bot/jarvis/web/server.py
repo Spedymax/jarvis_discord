@@ -265,6 +265,19 @@ async def api_sounds(request):
     return web.json_response({"sounds": [serializers.sound_view(s) for s in sounds]})
 
 
+async def api_stats(request):
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    from .. import db
+    g = int(gid)
+    total = await db.total_plays(g)
+    tracks = await db.top_tracks(g, 10)
+    requesters = await db.top_requesters(g, 10)
+    sounds = (await db.list_sounds(g))[:10]
+    return web.json_response(serializers.stats_view(total, tracks, requesters, sounds))
+
+
 async def cmd_sound_rename(request):
     bot, _, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
@@ -552,6 +565,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/remove", cmd_queue_remove)
     app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
+    app.router.add_get("/api/guilds/{gid}/stats", api_stats)
     app.router.add_get("/api/guilds/{gid}/sounds", api_sounds)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
