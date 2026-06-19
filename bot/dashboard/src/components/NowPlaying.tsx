@@ -6,9 +6,10 @@ import { IconPlay, IconPause, IconSkip, IconStop, IconLoop, IconShuffle } from "
 const LOOP_NEXT: Record<string, string> = { off: "track", track: "queue", queue: "off" };
 const fmt = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-export default function NowPlaying({ guildId, snapshot }: { guildId: string; snapshot: PlayerSnapshot }) {
+export default function NowPlaying({ guildId, snapshot, onSnap }: { guildId: string; snapshot: PlayerSnapshot; onSnap: (s: PlayerSnapshot) => void }) {
   const [pos, setPos] = useState(0);
   const base = useRef({ ms: 0, at: 0 });
+  const apply = (p: Promise<PlayerSnapshot>) => { p.then(onSnap).catch(() => {}); };
 
   useEffect(() => {
     base.current = { ms: snapshot.position_ms ?? 0, at: Date.now() };
@@ -56,7 +57,7 @@ export default function NowPlaying({ guildId, snapshot }: { guildId: string; sna
             <div className="relative h-1.5 w-full rounded-full bg-raised">
               <div className="absolute h-1.5 rounded-full bg-gradient-to-r from-accent to-accent2" style={{ width: `${pct}%` }} />
               <input type="range" min={0} max={len} value={Math.min(pos, len)}
-                onChange={(e) => seek(guildId, Number(e.target.value))}
+                onChange={(e) => apply(seek(guildId, Number(e.target.value)))}
                 className="absolute -top-1.5 h-4 w-full cursor-pointer opacity-0" />
             </div>
             <div className="mt-1 flex justify-between text-xs text-muted">
@@ -65,16 +66,16 @@ export default function NowPlaying({ guildId, snapshot }: { guildId: string; sna
           </div>
 
           <div className="mt-4 flex items-center gap-2">
-            <button className="icon-btn" onClick={() => setLoop(guildId, LOOP_NEXT[snapshot.loop ?? "off"])} title={`loop: ${snapshot.loop}`}>
+            <button className="icon-btn" onClick={() => apply(setLoop(guildId, LOOP_NEXT[snapshot.loop ?? "off"]))} title={`loop: ${snapshot.loop}`}>
               <IconLoop className={`h-5 w-5 ${snapshot.loop !== "off" ? "text-accent2" : ""}`} />
             </button>
             <button className="flex h-12 w-12 items-center justify-center rounded-full text-white" style={{ background: "var(--accent-grad)" }}
-              onClick={() => (snapshot.paused ? resume(guildId) : pause(guildId))}>
+              onClick={() => apply(snapshot.paused ? resume(guildId) : pause(guildId))}>
               {snapshot.paused ? <IconPlay className="h-6 w-6" /> : <IconPause className="h-6 w-6" />}
             </button>
-            <button className="icon-btn" onClick={() => skip(guildId)}><IconSkip /></button>
-            <button className="icon-btn" onClick={() => shuffle(guildId)} title="shuffle"><IconShuffle /></button>
-            <button className="icon-btn text-danger hover:text-danger" onClick={() => stop(guildId)} title="stop"><IconStop /></button>
+            <button className="icon-btn" onClick={() => apply(skip(guildId))}><IconSkip /></button>
+            <button className="icon-btn" onClick={() => apply(shuffle(guildId))} title="shuffle"><IconShuffle /></button>
+            <button className="icon-btn text-danger hover:text-danger" onClick={() => apply(stop(guildId))} title="stop"><IconStop /></button>
           </div>
         </div>
       </div>

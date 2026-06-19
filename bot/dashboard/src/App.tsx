@@ -71,11 +71,11 @@ export default function App() {
     <Layout
       sidebar={<Sidebar me={me} guildId={guildId} setGuildId={setGuildId} tab={tab} setTab={setTab} isAdmin={isAdmin} onLogout={() => logout().then(() => location.reload())} />}
       mobileNav={mobileNav}
-      bar={<PlayerBar guildId={guildId} snap={snap} pos={pos} />}
+      bar={<PlayerBar guildId={guildId} snap={snap} pos={pos} onSnap={setSnap} />}
     >
       {tab === "player" && (
         <div className="mx-auto max-w-4xl space-y-4">
-          <NowPlaying guildId={guildId} snapshot={snap} />
+          <NowPlaying guildId={guildId} snapshot={snap} onSnap={setSnap} />
           <Search guildId={guildId} />
           <Queue guildId={guildId} snapshot={snap} />
         </div>
