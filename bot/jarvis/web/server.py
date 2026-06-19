@@ -116,6 +116,135 @@ async def api_search(request: web.Request) -> web.Response:
     return web.json_response({"results": [serializers.track_view(t) for t in tracks[:8]]})
 
 
+async def _require_control(request: web.Request, gid: str):
+    """Returns (gp, None) if the user may control this guild's player, else (None, response)."""
+    entry = _guild_in_session(request, gid)
+    if entry is None:
+        return None, web.json_response({"error": "forbidden"}, status=403)
+    if Level.from_str(entry.get("level", "viewer")) < Level.DJ:
+        return None, web.json_response({"error": "forbidden"}, status=403)
+    gp = state.get(int(gid))
+    if gp is None:
+        return None, web.json_response({"error": "no_active_player"}, status=409)
+    return gp, None
+
+
+async def _ok(gp) -> web.Response:
+    await broadcast_player(gp)
+    return web.json_response(serializers.player_view(gp))
+
+
+async def cmd_pause(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    await gp.wl.pause(True)
+    return await _ok(gp)
+
+
+async def cmd_resume(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    await gp.wl.pause(False)
+    return await _ok(gp)
+
+
+async def cmd_skip(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    await gp.wl.skip(force=True)
+    return await _ok(gp)
+
+
+async def cmd_stop(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    gp.loop_mode = "off"
+    gp.wl.queue.clear()
+    await gp.wl.skip(force=True)
+    return await _ok(gp)
+
+
+async def cmd_shuffle(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    gp.wl.queue.shuffle()
+    return await _ok(gp)
+
+
+async def cmd_seek(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    await gp.wl.seek(int(data.get("position_ms", 0)))
+    return await _ok(gp)
+
+
+async def cmd_volume(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    vol = max(0, min(150, int(data.get("volume", 100))))
+    await gp.wl.set_volume(vol)
+    return await _ok(gp)
+
+
+async def cmd_loop(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    mode = data.get("mode", "off")
+    if mode not in ("off", "track", "queue"):
+        return web.json_response({"error": "bad_mode"}, status=422)
+    gp.loop_mode = mode
+    return await _ok(gp)
+
+
+async def cmd_filters(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    if "bassboost" in data:
+        await gp.apply_bassboost(data["bassboost"])
+    if "effect" in data:
+        await gp.apply_effect(data["effect"])
+    return await _ok(gp)
+
+
+async def cmd_play(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    query = (data.get("query") or "").strip()
+    mode = data.get("mode", "enqueue")
+    from ..errors import TrackNotFoundError
+    try:
+        tracks, _ = await resolve_tracks(query, request["user"].get("username", ""))
+    except TrackNotFoundError:
+        return web.json_response({"error": "not_found", "message": "Не нашёл трек."}, status=422)
+    for t in tracks:
+        ident = getattr(t, "identifier", None)
+        if ident:
+            gp.requesters[ident] = getattr(t, "requester_name", "")
+    if mode == "skip":
+        await gp.play_skip_many(tracks)
+    elif mode == "next":
+        await gp.play_next_many(tracks)
+    else:
+        await gp.add_many(tracks)
+    gp.touch_persist()
+    return await _ok(gp)
+
+
 async def auth_login(request: web.Request) -> web.Response:
     s = request.app["settings"]
     state_tok = secrets.token_urlsafe(16)
@@ -214,6 +343,16 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_get("/api/guilds/{gid}/health", api_guild_health)
     app.router.add_get("/api/guilds/{gid}/player", api_player)
     app.router.add_get("/api/guilds/{gid}/search", api_search)
+    app.router.add_post("/api/guilds/{gid}/play", cmd_play)
+    app.router.add_post("/api/guilds/{gid}/pause", cmd_pause)
+    app.router.add_post("/api/guilds/{gid}/resume", cmd_resume)
+    app.router.add_post("/api/guilds/{gid}/skip", cmd_skip)
+    app.router.add_post("/api/guilds/{gid}/stop", cmd_stop)
+    app.router.add_post("/api/guilds/{gid}/shuffle", cmd_shuffle)
+    app.router.add_post("/api/guilds/{gid}/seek", cmd_seek)
+    app.router.add_post("/api/guilds/{gid}/volume", cmd_volume)
+    app.router.add_post("/api/guilds/{gid}/loop", cmd_loop)
+    app.router.add_post("/api/guilds/{gid}/filters", cmd_filters)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
     app.router.add_post("/api/logout", api_logout)
