@@ -421,6 +421,21 @@ async def cmd_sound_add(request):
     return web.json_response(serializers.sound_view(sound))
 
 
+async def cmd_sound_stop(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    gp = state.get(int(request.match_info["gid"]))
+    stopped = False
+    if gp is not None and getattr(gp, "playing_sound", False):
+        try:
+            await gp.wl.skip(force=True)
+            stopped = True
+        except Exception:
+            pass
+    return web.json_response({"ok": True, "stopped": stopped})
+
+
 async def cmd_sound_play(request):
     bot, username, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
@@ -592,6 +607,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/delete", cmd_sound_delete)
     app.router.add_post("/api/guilds/{gid}/sounds/add", cmd_sound_add)
+    app.router.add_post("/api/guilds/{gid}/sounds/stop", cmd_sound_stop)
     app.router.add_get("/api/guilds/{gid}/tts/voices", api_tts_voices)
     app.router.add_post("/api/guilds/{gid}/tts", cmd_tts)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/play", cmd_sound_play)

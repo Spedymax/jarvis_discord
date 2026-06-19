@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { deleteSound, errMsg, getSounds, playSound, renameSound, setSoundVolume, addSoundUrl, addSoundFile, type SoundV } from "../sounds";
-import { IconSearch, IconVolume, IconTrash, IconPlus } from "../icons";
+import { deleteSound, errMsg, getSounds, playSound, stopSound, renameSound, setSoundVolume, addSoundUrl, addSoundFile, type SoundV } from "../sounds";
+import { IconSearch, IconVolume, IconTrash, IconPlus, IconStop } from "../icons";
 
 export default function Soundboard({ guildId }: { guildId: string }) {
   const [sounds, setSounds] = useState<SoundV[]>([]);
@@ -30,10 +30,16 @@ export default function Soundboard({ guildId }: { guildId: string }) {
   return (
     <div className="space-y-4">
       {msg && <div className="rounded-lg bg-raised px-3 py-2 text-sm text-muted">{msg}</div>}
-      <div className="flex items-center gap-2 rounded-lg bg-raised px-3">
-        <IconSearch className="h-4 w-4 text-muted" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Фильтр звуков…"
-          className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted" />
+      <div className="flex items-center gap-2">
+        <div className="flex flex-1 items-center gap-2 rounded-lg bg-raised px-3">
+          <IconSearch className="h-4 w-4 text-muted" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Фильтр звуков…"
+            className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted" />
+        </div>
+        <button className="btn shrink-0 text-danger" title="Остановить звук и вернуть музыку"
+          onClick={async () => setMsg(await errMsg(await stopSound(guildId)))}>
+          <IconStop className="h-4 w-4" /> Стоп звука
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
