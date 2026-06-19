@@ -69,7 +69,7 @@ export default function NowPlaying({ guildId, snapshot, onSnap }: { guildId: str
             <button className="icon-btn" onClick={() => apply(setLoop(guildId, LOOP_NEXT[snapshot.loop ?? "off"]))} title={`loop: ${snapshot.loop}`}>
               <IconLoop className={`h-5 w-5 ${snapshot.loop !== "off" ? "text-accent2" : ""}`} />
             </button>
-            <button className="flex h-12 w-12 items-center justify-center rounded-full text-white" style={{ background: "var(--accent-grad)" }}
+            <button className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_0_18px_rgba(255,73,217,0.6)]" style={{ background: "var(--accent-grad)" }}
               onClick={() => apply(snapshot.paused ? resume(guildId) : pause(guildId))}>
               {snapshot.paused ? <IconPlay className="h-6 w-6" /> : <IconPause className="h-6 w-6" />}
             </button>

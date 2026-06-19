@@ -3,20 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --accent-grad: linear-gradient(135deg, #5865f2, #7c5cff);
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --accent-grad: linear-gradient(135deg, #ff49d9, #37d6ff);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --glow: 0 0 16px rgba(255, 73, 217, 0.45);
 }
 
 html, body, #root { height: 100%; }
-body { @apply bg-bg text-text; font-variant-numeric: tabular-nums; }
+body { @apply text-text; font-variant-numeric: tabular-nums; background: linear-gradient(160deg, #1a0b2e, #0e0420 60%); background-attachment: fixed; }
 * { scrollbar-width: thin; scrollbar-color: #2a2d36 transparent; }
 
 @layer components {
   .card { @apply rounded-2xl border border-border bg-card shadow-panel; }
   .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-raised px-3 py-2 text-sm text-text transition-colors duration-150 hover:bg-[#30343f] disabled:opacity-50; }
-  .btn-primary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90; background: var(--accent-grad); }
+  .btn-primary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90; background: var(--accent-grad); box-shadow: var(--glow); }
   .icon-btn { @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors duration-150 hover:bg-raised hover:text-text; }
   .pill { @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors duration-150 hover:bg-raised hover:text-text; }
-  .pill-active { @apply text-white hover:opacity-100; background: var(--accent-grad); }
+  .pill-active { @apply text-white hover:opacity-100; background: var(--accent-grad); box-shadow: var(--glow); }
   .input { @apply w-full rounded-lg bg-raised px-3 py-2 text-sm text-text outline-none ring-1 ring-transparent transition placeholder:text-muted focus:ring-accent; }
 }

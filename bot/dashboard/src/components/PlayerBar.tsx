@@ -25,7 +25,7 @@ export default function PlayerBar({ guildId, snap, pos, onSnap }: { guildId: str
           <button className="icon-btn" onClick={() => apply(setLoop(guildId, LOOP_NEXT[snap.loop ?? "off"]))} title={`loop: ${snap.loop}`}>
             <IconLoop className={`h-4 w-4 ${snap.loop && snap.loop !== "off" ? "text-accent2" : ""}`} />
           </button>
-          <button className="flex h-10 w-10 items-center justify-center rounded-full text-white disabled:opacity-50"
+          <button className="flex h-10 w-10 items-center justify-center rounded-full text-white shadow-[0_0_16px_rgba(255,73,217,0.55)] disabled:opacity-50"
             style={{ background: "var(--accent-grad)" }}
             onClick={() => apply(snap.paused ? resume(guildId) : pause(guildId))} disabled={!cur}>
             {snap.paused ? <IconPlay /> : <IconPause />}
