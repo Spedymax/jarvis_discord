@@ -24,3 +24,21 @@ async def resolve_tracks(query: str, requester_name: str) -> tuple[list, str | N
     track = results[0]
     track.requester_name = requester_name
     return [track], None
+
+
+async def search_tracks(query: str, limit: int = 8) -> list:
+    """Return up to `limit` search hits for a query (preview for the dashboard).
+
+    Unlike resolve_tracks (which collapses a text search to the top hit for /play),
+    this keeps multiple results so the user can pick. Returns [] on no match.
+    """
+    lavalink_query = to_lavalink_query(query)
+    try:
+        results = await wavelink.Playable.search(lavalink_query)
+    except wavelink.LavalinkLoadException:
+        return []
+    if not results:
+        return []
+    if isinstance(results, wavelink.Playlist):
+        return list(results.tracks)[:limit]
+    return list(results)[:limit]

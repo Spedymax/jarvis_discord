@@ -104,6 +104,23 @@ async def test_volume_clamped(monkeypatch):
         await c.close()
 
 
+async def test_stop_clears_current(monkeypatch):
+    from tests.conftest import make_track
+    gp = _gp()
+    gp.current_track = make_track("Playing")
+    monkeypatch.setattr("jarvis.state.get", lambda gid: gp)
+    monkeypatch.setattr("jarvis.web.server.broadcast_player", AsyncMock())
+    c = await _client()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("admin")})
+        resp = await c.post("/api/guilds/1/stop")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["current"] is None
+    finally:
+        await c.close()
+
+
 async def test_play_enqueue(monkeypatch):
     gp = _gp(); gp.add_many = AsyncMock()
     monkeypatch.setattr("jarvis.state.get", lambda gid: gp)

@@ -34,6 +34,20 @@ async def test_empty_raises(monkeypatch):
         await resolve_tracks("nothing", "spedy")
 
 
+async def test_search_tracks_multiple(monkeypatch):
+    from jarvis.track_resolver import search_tracks
+    hits = [MagicMock() for _ in range(10)]
+    monkeypatch.setattr(wavelink.Playable, "search", AsyncMock(return_value=hits))
+    out = await search_tracks("song", limit=8)
+    assert len(out) == 8  # capped
+
+
+async def test_search_tracks_empty(monkeypatch):
+    from jarvis.track_resolver import search_tracks
+    monkeypatch.setattr(wavelink.Playable, "search", AsyncMock(return_value=[]))
+    assert await search_tracks("nothing") == []
+
+
 async def test_load_exception_raises(monkeypatch):
     exc = wavelink.LavalinkLoadException.__new__(wavelink.LavalinkLoadException)
     monkeypatch.setattr(
