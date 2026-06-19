@@ -80,12 +80,14 @@ def voice_view(channel_name, members) -> dict[str, Any]:
     return {"channel": channel_name, "listeners": listeners}
 
 
-def stats_view(total: int, tracks: list, requesters: list, sounds: list) -> dict[str, Any]:
+def stats_view(total, tracks, requesters, sounds, recent=None, by_day=None) -> dict[str, Any]:
     return {
         "total_plays": total,
         "top_tracks": tracks,
         "top_requesters": requesters,
         "top_sounds": [{"name": s.name, "play_count": s.play_count} for s in sounds],
+        "recent": recent or [],
+        "by_day": by_day or [],
     }
 
 

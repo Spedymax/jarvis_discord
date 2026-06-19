@@ -36,6 +36,8 @@ async def test_stats(monkeypatch):
     snd = Sound(id=1, guild_id=1, name="airhorn", file_path="/x", length_ms=1000,
                 owner_id=9, created_at=0, play_count=7, volume=100)
     monkeypatch.setattr("jarvis.db.list_sounds", AsyncMock(return_value=[snd]))
+    monkeypatch.setattr("jarvis.db.recent_plays", AsyncMock(return_value=[]))
+    monkeypatch.setattr("jarvis.db.plays_by_day", AsyncMock(return_value=[]))
     c = await _client()
     try:
         c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("viewer")})
