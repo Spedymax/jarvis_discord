@@ -217,15 +217,27 @@ async def cmd_filters(request):
 
 
 async def cmd_play(request):
-    gp, err = await _require_control(request, request.match_info["gid"])
+    bot, username, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
         return err
+    gid = int(request.match_info["gid"])
+    gp = state.get(gid)
+    if gp is None:
+        # Bot not in voice — join the caller's current channel (like the soundboard).
+        from ..cogs.sound import ensure_voice_for_member
+        from ..hotkeys import find_member_in_voice
+        member = find_member_in_voice(bot, int(request["user"]["user_id"]), gid)
+        if member is None:
+            return web.json_response({"error": "not_in_voice"}, status=409)
+        gp = await ensure_voice_for_member(member)
+        if gp is None:
+            return web.json_response({"error": "bot_busy"}, status=409)
     data = await request.json()
     query = (data.get("query") or "").strip()
     mode = data.get("mode", "enqueue")
     from ..errors import TrackNotFoundError
     try:
-        tracks, _ = await resolve_tracks(query, request["user"].get("username", ""))
+        tracks, _ = await resolve_tracks(query, username)
     except TrackNotFoundError:
         return web.json_response({"error": "not_found", "message": "Не нашёл трек."}, status=422)
     for t in tracks:

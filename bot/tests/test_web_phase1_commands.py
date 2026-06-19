@@ -121,6 +121,39 @@ async def test_stop_clears_current(monkeypatch):
         await c.close()
 
 
+async def test_play_joins_when_no_player(monkeypatch):
+    from tests.conftest import make_track
+    gp = _gp(); gp.add_many = AsyncMock()
+    monkeypatch.setattr("jarvis.state.get", lambda gid: None)
+    monkeypatch.setattr("jarvis.hotkeys.find_member_in_voice", lambda b, u, g=None: MagicMock())
+    monkeypatch.setattr("jarvis.cogs.sound.ensure_voice_for_member", AsyncMock(return_value=gp))
+    monkeypatch.setattr("jarvis.web.server.broadcast_player", AsyncMock())
+    async def fake_resolve(q, name): return [make_track("X")], None
+    monkeypatch.setattr("jarvis.web.server.resolve_tracks", fake_resolve)
+    c = await _client()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("admin")})
+        resp = await c.post("/api/guilds/1/play", json={"query": "x", "mode": "enqueue"})
+        assert resp.status == 200
+        gp.add_many.assert_awaited_once()
+    finally:
+        await c.close()
+
+
+async def test_play_not_in_voice(monkeypatch):
+    monkeypatch.setattr("jarvis.state.get", lambda gid: None)
+    monkeypatch.setattr("jarvis.hotkeys.find_member_in_voice", lambda b, u, g=None: None)
+    monkeypatch.setattr("jarvis.web.server.broadcast_player", AsyncMock())
+    c = await _client()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("admin")})
+        resp = await c.post("/api/guilds/1/play", json={"query": "x", "mode": "enqueue"})
+        assert resp.status == 409
+        assert (await resp.json())["error"] == "not_in_voice"
+    finally:
+        await c.close()
+
+
 async def test_play_enqueue(monkeypatch):
     gp = _gp(); gp.add_many = AsyncMock()
     monkeypatch.setattr("jarvis.state.get", lambda gid: gp)
