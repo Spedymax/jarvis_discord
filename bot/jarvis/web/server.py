@@ -315,6 +315,54 @@ async def cmd_sound_delete(request):
     return web.json_response({"ok": True})
 
 
+async def api_tts_voices(request):
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    from ..cogs.tts import TTS_VOICES
+    return web.json_response({"voices": TTS_VOICES})
+
+
+async def cmd_tts(request):
+    bot, username, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    import uuid
+    from ..cogs.sound import ensure_voice_for_member
+    from ..cogs.tts import (TTS_DIR, TTS_VOICES, TtsError, _cleanup_old_tts,
+                            _synthesize, _validate_text, play_tts_core)
+    from ..hotkeys import find_member_in_voice
+    gid = int(request.match_info["gid"])
+    data = await request.json()
+    try:
+        text = _validate_text(data.get("text", ""))
+    except TtsError as e:
+        return web.json_response({"error": "invalid", "message": e.user_message}, status=422)
+    voice = data.get("voice") or TTS_VOICES[0]["id"]
+    if voice not in {v["id"] for v in TTS_VOICES}:
+        voice = TTS_VOICES[0]["id"]
+    member = find_member_in_voice(bot, int(request["user"]["user_id"]), gid)
+    if member is None:
+        return web.json_response({"error": "not_in_voice"}, status=409)
+    _cleanup_old_tts()
+    TTS_DIR.mkdir(parents=True, exist_ok=True)
+    dest = TTS_DIR / f"{uuid.uuid4().hex}.mp3"
+    try:
+        await _synthesize(text, dest, voice)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        return web.json_response({"error": "synth_failed", "message": "Не смог синтезировать."}, status=422)
+    gp = await ensure_voice_for_member(member)
+    if gp is None:
+        dest.unlink(missing_ok=True)
+        return web.json_response({"error": "bot_busy"}, status=409)
+    ok = await play_tts_core(gp, dest, username)
+    if not ok:
+        dest.unlink(missing_ok=True)
+        return web.json_response({"error": "play_failed"}, status=422)
+    return web.json_response({"ok": True})
+
+
 async def cmd_sound_add(request):
     bot, _, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
@@ -509,6 +557,8 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/delete", cmd_sound_delete)
     app.router.add_post("/api/guilds/{gid}/sounds/add", cmd_sound_add)
+    app.router.add_get("/api/guilds/{gid}/tts/voices", api_tts_voices)
+    app.router.add_post("/api/guilds/{gid}/tts", cmd_tts)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/play", cmd_sound_play)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
