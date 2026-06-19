@@ -8,11 +8,12 @@ import Search from "./components/Search";
 import Soundboard from "./components/Soundboard";
 import Tts from "./components/Tts";
 import Stats from "./components/Stats";
+import Admin from "./components/Admin";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [guildId, setGuildId] = useState<string>("");
-  const [tab, setTab] = useState<"player" | "sound" | "tts" | "stats">("player");
+  const [tab, setTab] = useState<"player" | "sound" | "tts" | "stats" | "admin">("player");
 
   useEffect(() => { getMe().then(setMe).catch(() => setMe(null)); }, []);
   useEffect(() => {
@@ -29,6 +30,8 @@ export default function App() {
       </div>
     );
   }
+
+  const isAdmin = me.guilds.find((g) => g.id === guildId)?.level === "admin";
 
   return (
     <div className="mx-auto max-w-3xl p-6">
@@ -55,11 +58,13 @@ export default function App() {
         <button className={`btn ${tab === "sound" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("sound")}>Саундборд</button>
         <button className={`btn ${tab === "tts" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("tts")}>TTS</button>
         <button className={`btn ${tab === "stats" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("stats")}>Статистика</button>
+        {isAdmin && <button className={`btn ${tab === "admin" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("admin")}>Админ</button>}
       </nav>
       {tab === "player" && <PlayerPanel guildId={guildId} />}
       {tab === "sound" && <Soundboard guildId={guildId} />}
       {tab === "tts" && <Tts guildId={guildId} />}
       {tab === "stats" && <Stats guildId={guildId} />}
+      {tab === "admin" && isAdmin && <Admin guildId={guildId} />}
     </div>
   );
 }
