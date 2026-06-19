@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 _DB_PATH: Path | None = None
 
@@ -84,6 +84,21 @@ async def init_db(path: Path) -> None:
                 PRIMARY KEY (guild_id, role_id)
             )
             """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS track_plays (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id   INTEGER NOT NULL,
+                title      TEXT,
+                author     TEXT,
+                requester  TEXT,
+                played_at  INTEGER NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_track_plays_guild ON track_plays(guild_id)"
         )
         try:
             await conn.execute(
@@ -290,3 +305,49 @@ async def get_role_perms(guild_id: int) -> dict[int, str]:
         )
         rows = await cur.fetchall()
     return {int(r[0]): str(r[1]) for r in rows}
+
+
+async def record_track_play(guild_id: int, title, author, requester, played_at: int) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute(
+            "INSERT INTO track_plays (guild_id, title, author, requester, played_at) VALUES (?, ?, ?, ?, ?)",
+            (guild_id, title, author, requester, played_at),
+        )
+        await conn.commit()
+
+
+async def top_tracks(guild_id: int, limit: int = 10) -> list[dict]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            """
+            SELECT title, author, COUNT(*) AS plays FROM track_plays
+            WHERE guild_id = ?
+            GROUP BY title, author ORDER BY plays DESC, title LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        rows = await cur.fetchall()
+    return [{"title": r[0], "author": r[1], "plays": int(r[2])} for r in rows]
+
+
+async def top_requesters(guild_id: int, limit: int = 10) -> list[dict]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            """
+            SELECT requester, COUNT(*) AS plays FROM track_plays
+            WHERE guild_id = ? AND requester IS NOT NULL AND requester != ''
+            GROUP BY requester ORDER BY plays DESC, requester LIMIT ?
+            """,
+            (guild_id, limit),
+        )
+        rows = await cur.fetchall()
+    return [{"name": r[0], "plays": int(r[1])} for r in rows]
+
+
+async def total_plays(guild_id: int) -> int:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            "SELECT COUNT(*) FROM track_plays WHERE guild_id = ?", (guild_id,)
+        )
+        row = await cur.fetchone()
+    return int(row[0]) if row else 0
