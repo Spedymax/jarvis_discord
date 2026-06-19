@@ -36,12 +36,15 @@ class Throttle:
         return True
 
 
-def find_member_in_voice(bot: Any, user_id: int) -> Optional[Any]:
+def find_member_in_voice(bot: Any, user_id: int, guild_id: Optional[int] = None) -> Optional[Any]:
     """Find a member with the given id currently in any voice channel.
 
     Uses voice-state cache (channel.members) — no privileged members intent.
+    If guild_id is given, only that guild is scanned.
     """
     for guild in bot.guilds:
+        if guild_id is not None and getattr(guild, "id", None) != guild_id:
+            continue
         for vc in guild.voice_channels:
             for member in vc.members:
                 if getattr(member, "id", None) == user_id and getattr(member, "voice", None):
