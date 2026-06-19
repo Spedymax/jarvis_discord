@@ -6,11 +6,12 @@ import NowPlaying from "./components/NowPlaying";
 import Queue from "./components/Queue";
 import Search from "./components/Search";
 import Soundboard from "./components/Soundboard";
+import Tts from "./components/Tts";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [guildId, setGuildId] = useState<string>("");
-  const [tab, setTab] = useState<"player" | "sound">("player");
+  const [tab, setTab] = useState<"player" | "sound" | "tts">("player");
 
   useEffect(() => { getMe().then(setMe).catch(() => setMe(null)); }, []);
   useEffect(() => {
@@ -51,8 +52,11 @@ export default function App() {
       <nav className="mb-4 flex gap-2">
         <button className={`btn ${tab === "player" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("player")}>Плеер</button>
         <button className={`btn ${tab === "sound" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("sound")}>Саундборд</button>
+        <button className={`btn ${tab === "tts" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("tts")}>TTS</button>
       </nav>
-      {tab === "player" ? <PlayerPanel guildId={guildId} /> : <Soundboard guildId={guildId} />}
+      {tab === "player" && <PlayerPanel guildId={guildId} />}
+      {tab === "sound" && <Soundboard guildId={guildId} />}
+      {tab === "tts" && <Tts guildId={guildId} />}
     </div>
   );
 }
