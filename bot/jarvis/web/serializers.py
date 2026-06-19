@@ -67,6 +67,19 @@ def track_view(track, requesters: dict[str, str] | None = None) -> dict[str, Any
     }
 
 
+def voice_view(channel_name, members) -> dict[str, Any]:
+    listeners = []
+    for m in members or []:
+        if getattr(m, "bot", False):
+            continue
+        av = getattr(m, "display_avatar", None)
+        listeners.append({
+            "name": getattr(m, "display_name", str(m)),
+            "avatar": str(av.url) if av is not None and getattr(av, "url", None) else None,
+        })
+    return {"channel": channel_name, "listeners": listeners}
+
+
 def stats_view(total: int, tracks: list, requesters: list, sounds: list) -> dict[str, Any]:
     return {
         "total_plays": total,

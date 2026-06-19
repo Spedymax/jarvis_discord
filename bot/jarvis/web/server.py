@@ -285,6 +285,17 @@ async def api_logs(request):
     return web.json_response({"lines": text.splitlines()[-lines:]})
 
 
+async def api_voice(request):
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    gp = state.get(int(gid))
+    ch = getattr(gp.wl, "channel", None) if gp is not None else None
+    if ch is None:
+        return web.json_response({"channel": None, "listeners": []})
+    return web.json_response(serializers.voice_view(getattr(ch, "name", None), getattr(ch, "members", [])))
+
+
 async def api_stats(request):
     gid = request.match_info["gid"]
     if _guild_in_session(request, gid) is None:
@@ -601,6 +612,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
     app.router.add_get("/api/guilds/{gid}/stats", api_stats)
+    app.router.add_get("/api/guilds/{gid}/voice", api_voice)
     app.router.add_get("/api/guilds/{gid}/logs", api_logs)
     app.router.add_get("/api/guilds/{gid}/sounds", api_sounds)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
