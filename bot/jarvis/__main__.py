@@ -108,6 +108,18 @@ def build_bot(settings: Settings) -> commands.Bot:
                 if remembered:
                     track.requester_name = remembered
             gp.current_track = track
+            try:
+                import time as _t
+                from .db import record_track_play
+                await record_track_play(
+                    payload.player.guild.id,
+                    getattr(track, "title", None),
+                    getattr(track, "author", None),
+                    getattr(track, "requester_name", None),
+                    int(_t.time()),
+                )
+            except Exception:
+                log.debug("record_track_play failed", exc_info=True)
             gp.current_background = pick_background()
             view = ControlsView(gp)
             if gp.nowplaying_msg is not None:
