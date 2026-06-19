@@ -20,16 +20,28 @@ DISCORD_CLIENT_SECRET=<from portal>
 
 `.env` is read by compose only on create → recreate the bot to pick it up.
 
-## 3. Deploy compose change (NOT under watchtower)
+## 3. Add the port to the SERVER compose (do NOT rsync the repo compose)
 
-```bash
-rsync -av /Users/mso/PythonProject/DiscordBot/docker-compose.yml \
-  spedymax@192.168.1.4:/home/spedymax/jarvis/docker-compose.yml
-ssh spedymax@192.168.1.4 'cd ~/jarvis && echo "123" | sudo -S docker compose up -d --force-recreate bot'
+⚠️ The repo `docker-compose.yml` bot service is **build-based** (`build: ./bot`, for local dev).
+The **server** compose is **image-based** (`image: ghcr.io/spedymax/jarvis_discord:latest` +
+watchtower). Rsyncing the repo file over the server's would switch it to build-based and break
+watchtower. Edit the server file in place instead — add only the port block to the `bot:` service:
+
+```yaml
+    ports:
+      - "127.0.0.1:8099:8099"
 ```
 
-(The new bot image with the dashboard arrives via the normal push→GHCR→watchtower flow,
-but `--force-recreate` here also re-reads `.env` and applies the new port mapping.)
+Then pull the dashboard image (CI/GHCR) and recreate (this also re-reads `.env`):
+
+```bash
+ssh spedymax@192.168.1.4 'cd ~/jarvis \
+  && echo "123" | sudo -S docker compose pull bot \
+  && echo "123" | sudo -S docker compose up -d --force-recreate bot'
+```
+
+Note: the in-container server binds `0.0.0.0:8099`; the `127.0.0.1:8099:8099` host mapping is
+what restricts exposure to host loopback (Cloudflare Tunnel reaches it from there).
 
 ## 4. Cloudflare Tunnel ingress
 

@@ -201,7 +201,10 @@ async def start_dashboard(bot, settings, *, started_at: int) -> web.AppRunner:
     app = create_app(bot, settings, started_at=started_at)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, host="127.0.0.1", port=settings.dashboard_port)
+    # Bind 0.0.0.0 INSIDE the container so Docker's published port can reach it.
+    # External exposure is restricted by the compose mapping "127.0.0.1:8099:8099"
+    # (host loopback only) + Cloudflare Tunnel — not by the in-container bind.
+    site = web.TCPSite(runner, host="0.0.0.0", port=settings.dashboard_port)
     await site.start()
-    log.info("Dashboard listening on 127.0.0.1:%s", settings.dashboard_port)
+    log.info("Dashboard listening on 0.0.0.0:%s (in-container)", settings.dashboard_port)
     return runner
