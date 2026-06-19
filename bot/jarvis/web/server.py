@@ -245,6 +245,76 @@ async def cmd_play(request):
     return await _ok(gp)
 
 
+async def _require_sound_control(request: web.Request, gid: str):
+    """Like _require_control but does NOT require an active player (play joins voice).
+    Returns (bot, username, None) or (None, None, response)."""
+    entry = _guild_in_session(request, gid)
+    if entry is None:
+        return None, None, web.json_response({"error": "forbidden"}, status=403)
+    if Level.from_str(entry.get("level", "viewer")) < Level.DJ:
+        return None, None, web.json_response({"error": "forbidden"}, status=403)
+    return request.app["bot"], request["user"].get("username", ""), None
+
+
+async def api_sounds(request):
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    from .. import db
+    sounds = await db.list_sounds(int(gid))
+    return web.json_response({"sounds": [serializers.sound_view(s) for s in sounds]})
+
+
+async def cmd_sound_rename(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from .. import db
+    from ..cogs.sound import SoundError, _validate_name
+    sound = await db.get_sound_by_id(int(request.match_info["id"]))
+    if sound is None:
+        return web.json_response({"error": "not_found"}, status=404)
+    data = await request.json()
+    try:
+        new_name = _validate_name(data.get("name", ""))
+    except SoundError as e:
+        return web.json_response({"error": "invalid", "message": e.user_message}, status=422)
+    if await db.get_sound(sound.guild_id, new_name) is not None:
+        return web.json_response({"error": "name_taken"}, status=422)
+    renamed = await db.rename_sound(sound.guild_id, sound.name, new_name)
+    if renamed is None:
+        return web.json_response({"error": "rename_failed"}, status=422)
+    return web.json_response(serializers.sound_view(renamed))
+
+
+async def cmd_sound_volume(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from .. import db
+    sid = int(request.match_info["id"])
+    if await db.get_sound_by_id(sid) is None:
+        return web.json_response({"error": "not_found"}, status=404)
+    data = await request.json()
+    vol = max(20, min(300, int(data.get("volume", 100))))
+    await db.set_sound_volume(sid, vol)
+    return web.json_response({"ok": True, "volume": vol})
+
+
+async def cmd_sound_delete(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from pathlib import Path
+    from .. import db
+    sound = await db.get_sound_by_id(int(request.match_info["id"]))
+    if sound is None:
+        return web.json_response({"error": "not_found"}, status=404)
+    Path(sound.file_path).unlink(missing_ok=True)
+    await db.delete_sound(sound.guild_id, sound.name)
+    return web.json_response({"ok": True})
+
+
 async def cmd_queue_remove(request):
     gp, err = await _require_control(request, request.match_info["gid"])
     if err:
@@ -386,6 +456,10 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/remove", cmd_queue_remove)
     app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
+    app.router.add_get("/api/guilds/{gid}/sounds", api_sounds)
+    app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
+    app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
+    app.router.add_post("/api/guilds/{gid}/sounds/{id}/delete", cmd_sound_delete)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
     app.router.add_post("/api/logout", api_logout)
