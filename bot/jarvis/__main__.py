@@ -515,6 +515,12 @@ async def main() -> None:
 
     async with bot:
         import time as _t
+        # Ensure the DB is ready before the dashboard starts serving requests —
+        # setup_hook also calls init_db (idempotent), but it runs after the web
+        # server is up, so without this the first /stats etc. races with a
+        # not-yet-initialised DB ("init_db has not been called").
+        if settings.dashboard_enabled:
+            await init_db(settings.data_dir / "bot.sqlite")
         dash_runner = await _maybe_start_dashboard(bot, settings, started_at=int(_t.time()))
         bot_task = asyncio.create_task(bot.start(settings.discord_token))
         stop_task = asyncio.create_task(stop_event.wait())
