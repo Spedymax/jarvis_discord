@@ -245,6 +245,36 @@ async def cmd_play(request):
     return await _ok(gp)
 
 
+async def cmd_queue_remove(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    gp.remove_at(int(data.get("index", -1)))
+    gp.touch_persist()
+    return await _ok(gp)
+
+
+async def cmd_queue_move(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    gp.move(int(data.get("from", -1)), int(data.get("to", 0)))
+    gp.touch_persist()
+    return await _ok(gp)
+
+
+async def cmd_queue_jump(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    data = await request.json()
+    await gp.jump_to(int(data.get("index", 0)))
+    gp.touch_persist()
+    return await _ok(gp)
+
+
 async def auth_login(request: web.Request) -> web.Response:
     s = request.app["settings"]
     state_tok = secrets.token_urlsafe(16)
@@ -353,6 +383,9 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/volume", cmd_volume)
     app.router.add_post("/api/guilds/{gid}/loop", cmd_loop)
     app.router.add_post("/api/guilds/{gid}/filters", cmd_filters)
+    app.router.add_post("/api/guilds/{gid}/queue/remove", cmd_queue_remove)
+    app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
+    app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
     app.router.add_post("/api/logout", api_logout)
