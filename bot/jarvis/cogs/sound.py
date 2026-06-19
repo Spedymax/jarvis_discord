@@ -265,6 +265,50 @@ async def _probe_length(file_path: Path) -> int:
     return int(track.length)
 
 
+async def _finalize_sound(guild_id: int, cleaned_name: str, target: Path, owner_id: int) -> "db.Sound":
+    try:
+        length_ms = await _probe_length(target)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise SoundError("Файл не читается как аудио.")
+    if length_ms > MAX_LENGTH_MS:
+        target.unlink(missing_ok=True)
+        raise SoundError(f"Звук длиннее 4 минут ({length_ms // 1000}s).")
+    sound_id = await db.add_sound(
+        guild_id=guild_id, name=cleaned_name, file_path=str(target),
+        length_ms=length_ms, owner_id=owner_id, created_at=int(time.time()),
+    )
+    return await db.get_sound_by_id(sound_id)
+
+
+async def store_sound_from_bytes(guild_id: int, name: str, data: bytes, filename: str, owner_id: int) -> "db.Sound":
+    cleaned = _validate_name(name)
+    if await db.get_sound(guild_id, cleaned) is not None:
+        raise SoundError(f"Имя `{cleaned}` уже занято.")
+    if len(data) > MAX_FILE_SIZE:
+        raise SoundError("Файл больше 30MB.")
+    ext = _ext_from(filename)
+    target = _sound_dir_for(guild_id) / f"{uuid.uuid4().hex}.{ext}"
+    target.write_bytes(data)
+    return await _finalize_sound(guild_id, cleaned, target, owner_id)
+
+
+async def store_sound_from_url(guild_id: int, name: str, url: str, owner_id: int) -> "db.Sound":
+    cleaned = _validate_name(name)
+    if await db.get_sound(guild_id, cleaned) is not None:
+        raise SoundError(f"Имя `{cleaned}` уже занято.")
+    kind = classify_query(url)
+    sound_dir = _sound_dir_for(guild_id)
+    if kind in (SourceKind.YOUTUBE_URL, SourceKind.SOUNDCLOUD_URL):
+        target = await _ytdl_download(url, sound_dir / uuid.uuid4().hex)
+    else:
+        ext = await _resolve_url_ext(url)
+        target = sound_dir / f"{uuid.uuid4().hex}.{ext}"
+        await _download_url(url, target)
+        target = _normalize_extension(target)
+    return await _finalize_sound(guild_id, cleaned, target, owner_id)
+
+
 async def _ensure_voice(interaction: discord.Interaction) -> GuildPlayer:
     voice = getattr(interaction.user, "voice", None)
     if voice is None or voice.channel is None:
@@ -415,41 +459,18 @@ class SoundCog(commands.Cog):
         if file is not None:
             if file.size > MAX_FILE_SIZE:
                 raise SoundError("Файл больше 30MB.")
-            ext = _ext_from(file.filename)
-            target = _sound_dir_for(interaction.guild_id) / f"{uuid.uuid4().hex}.{ext}"  # type: ignore[arg-type]
-            await file.save(target)
+            data = await file.read()
+            sound = await store_sound_from_bytes(
+                interaction.guild_id, name, data, file.filename, interaction.user.id  # type: ignore[arg-type]
+            )
         else:
             assert url is not None
-            kind = classify_query(url)
-            sound_dir = _sound_dir_for(interaction.guild_id)  # type: ignore[arg-type]
-            if kind in (SourceKind.YOUTUBE_URL, SourceKind.SOUNDCLOUD_URL):
-                target = await _ytdl_download(url, sound_dir / uuid.uuid4().hex)
-            else:
-                ext = await _resolve_url_ext(url)
-                target = sound_dir / f"{uuid.uuid4().hex}.{ext}"
-                await _download_url(url, target)
-                target = _normalize_extension(target)
+            sound = await store_sound_from_url(
+                interaction.guild_id, name, url, interaction.user.id  # type: ignore[arg-type]
+            )
 
-        try:
-            length_ms = await _probe_length(target)
-        except Exception:
-            target.unlink(missing_ok=True)
-            raise SoundError("Файл не читается как аудио.")
-
-        if length_ms > MAX_LENGTH_MS:
-            target.unlink(missing_ok=True)
-            raise SoundError(f"Звук длиннее 4 минут ({length_ms // 1000}s).")
-
-        await db.add_sound(
-            guild_id=interaction.guild_id,  # type: ignore[arg-type]
-            name=cleaned,
-            file_path=str(target),
-            length_ms=length_ms,
-            owner_id=interaction.user.id,
-            created_at=int(time.time()),
-        )
         await interaction.followup.send(
-            f"✅ Сохранил `{cleaned}` ({length_ms // 1000}s).",
+            f"✅ Сохранил `{sound.name}` ({sound.length_ms // 1000}s).",
             ephemeral=True,
         )
 
