@@ -265,6 +265,29 @@ async def api_sounds(request):
     return web.json_response({"sounds": [serializers.sound_view(s) for s in sounds]})
 
 
+def _require_admin_resp(request: web.Request, gid: str):
+    entry = _guild_in_session(request, gid)
+    if entry is None or Level.from_str(entry.get("level", "viewer")) < Level.ADMIN:
+        return web.json_response({"error": "forbidden"}, status=403)
+    return None
+
+
+async def api_logs(request):
+    gid = request.match_info["gid"]
+    forbidden = _require_admin_resp(request, gid)
+    if forbidden is not None:
+        return forbidden
+    try:
+        lines = max(1, min(1000, int(request.query.get("lines", "200"))))
+    except ValueError:
+        lines = 200
+    path = request.app["settings"].log_dir / "bot.log"
+    if not path.is_file():
+        return web.json_response({"lines": []})
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return web.json_response({"lines": text.splitlines()[-lines:]})
+
+
 async def api_stats(request):
     gid = request.match_info["gid"]
     if _guild_in_session(request, gid) is None:
@@ -566,6 +589,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
     app.router.add_get("/api/guilds/{gid}/stats", api_stats)
+    app.router.add_get("/api/guilds/{gid}/logs", api_logs)
     app.router.add_get("/api/guilds/{gid}/sounds", api_sounds)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
