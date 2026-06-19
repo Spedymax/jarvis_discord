@@ -315,6 +315,31 @@ async def cmd_sound_delete(request):
     return web.json_response({"ok": True})
 
 
+async def cmd_sound_add(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from ..cogs.sound import SoundError, store_sound_from_bytes, store_sound_from_url
+    gid = int(request.match_info["gid"])
+    uid = int(request["user"]["user_id"])
+    ctype = request.content_type or ""
+    try:
+        if ctype.startswith("multipart/"):
+            post = await request.post()
+            name = str(post.get("name", "")).strip()
+            field = post.get("file")
+            if field is None or not hasattr(field, "file"):
+                return web.json_response({"error": "no_file"}, status=422)
+            data = field.file.read()
+            sound = await store_sound_from_bytes(gid, name, data, field.filename, uid)
+        else:
+            body = await request.json()
+            sound = await store_sound_from_url(gid, body.get("name", ""), body.get("url", ""), uid)
+    except SoundError as e:
+        return web.json_response({"error": "invalid", "message": e.user_message}, status=422)
+    return web.json_response(serializers.sound_view(sound))
+
+
 async def cmd_sound_play(request):
     bot, username, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
@@ -454,7 +479,7 @@ async def spa_fallback(request: web.Request) -> web.Response:
 
 
 def create_app(bot, settings, *, started_at: int) -> web.Application:
-    app = web.Application(middlewares=[_auth_middleware])
+    app = web.Application(middlewares=[_auth_middleware], client_max_size=32 * 1024 * 1024)
     app["bot"] = bot
     app["settings"] = settings
     app["started_at"] = started_at
@@ -483,6 +508,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/delete", cmd_sound_delete)
+    app.router.add_post("/api/guilds/{gid}/sounds/add", cmd_sound_add)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/play", cmd_sound_play)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
