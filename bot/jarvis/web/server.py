@@ -470,6 +470,46 @@ async def cmd_sound_play(request):
     return web.json_response({"ok": True})
 
 
+async def cmd_summon(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from ..cogs.sound import ensure_voice_for_member
+    from ..hotkeys import find_member_in_voice
+    gid = int(request.match_info["gid"])
+    member = find_member_in_voice(bot, int(request["user"]["user_id"]), gid)
+    if member is None:
+        return web.json_response({"error": "not_in_voice"}, status=409)
+    gp = await ensure_voice_for_member(member)
+    if gp is None:
+        return web.json_response({"error": "bot_busy"}, status=409)
+    return web.json_response({"ok": True})
+
+
+async def cmd_queue_clear(request):
+    gp, err = await _require_control(request, request.match_info["gid"])
+    if err:
+        return err
+    gp.wl.queue.clear()
+    gp.touch_persist()
+    return await _ok(gp)
+
+
+async def cmd_leave(request):
+    bot, _, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    gp = state.get(int(request.match_info["gid"]))
+    left = False
+    if gp is not None:
+        try:
+            await gp.wl.disconnect()
+            left = True
+        except Exception:
+            pass
+    return web.json_response({"ok": True, "left": left})
+
+
 async def cmd_queue_remove(request):
     gp, err = await _require_control(request, request.match_info["gid"])
     if err:
@@ -613,6 +653,9 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
     app.router.add_get("/api/guilds/{gid}/stats", api_stats)
     app.router.add_get("/api/guilds/{gid}/voice", api_voice)
+    app.router.add_post("/api/guilds/{gid}/summon", cmd_summon)
+    app.router.add_post("/api/guilds/{gid}/queue/clear", cmd_queue_clear)
+    app.router.add_post("/api/guilds/{gid}/leave", cmd_leave)
     app.router.add_get("/api/guilds/{gid}/logs", api_logs)
     app.router.add_get("/api/guilds/{gid}/sounds", api_sounds)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
