@@ -19,6 +19,12 @@ log = logging.getLogger(__name__)
 
 MAX_TEXT_LEN = 200
 TTS_VOICE = "ru-RU-DmitryNeural"
+TTS_VOICES = [
+    {"id": "ru-RU-DmitryNeural", "label": "Дмитрий (ru, м)"},
+    {"id": "ru-RU-SvetlanaNeural", "label": "Светлана (ru, ж)"},
+    {"id": "en-US-GuyNeural", "label": "Guy (en, м)"},
+    {"id": "en-US-JennyNeural", "label": "Jenny (en, ж)"},
+]
 TTS_DIR = SOUNDS_DIR / "_tts"
 TTS_FILE_TTL_SECONDS = 300
 
@@ -49,11 +55,11 @@ def _cleanup_old_tts() -> None:
             log.warning("Failed to clean TTS temp file %s", f, exc_info=True)
 
 
-async def _synthesize(text: str, dest: Path) -> None:
+async def _synthesize(text: str, dest: Path, voice: str = TTS_VOICE) -> None:
     """Synthesize text to an mp3 file via edge-tts. Raises on failure."""
     import edge_tts  # lazy import so dev installs without it still load other cogs
 
-    communicate = edge_tts.Communicate(text, TTS_VOICE)
+    communicate = edge_tts.Communicate(text, voice)
     await communicate.save(str(dest))
 
 
