@@ -17,31 +17,10 @@ from ..errors import (
     WrongVoiceChannelError,
 )
 from ..player import GuildPlayer
-from ..sources import to_lavalink_query
+from ..track_resolver import resolve_tracks
 from ..ui.card import refresh_now_playing
 
 log = logging.getLogger(__name__)
-
-
-async def _resolve_tracks(
-    query: str, requester: discord.abc.User
-) -> tuple[list[wavelink.Playable], str | None]:
-    lavalink_query = to_lavalink_query(query)
-    try:
-        results = await wavelink.Playable.search(lavalink_query)
-    except wavelink.LavalinkLoadException:
-        raise TrackNotFoundError()
-    if not results:
-        raise TrackNotFoundError()
-    name = getattr(requester, "display_name", str(requester))
-    if isinstance(results, wavelink.Playlist):
-        tracks = list(results.tracks)
-        for t in tracks:
-            t.requester_name = name
-        return tracks, getattr(results, "name", None)
-    track = results[0]
-    track.requester_name = name
-    return [track], None
 
 
 async def _ensure_player(interaction: discord.Interaction) -> GuildPlayer:
@@ -80,7 +59,8 @@ class Music(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        name = getattr(interaction.user, "display_name", str(interaction.user))
+        tracks, playlist_name = await resolve_tracks(query, name)
         for t in tracks:
             _remember_requester(gp, t)
         await gp.add_many(tracks)
@@ -102,7 +82,8 @@ class Music(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        name = getattr(interaction.user, "display_name", str(interaction.user))
+        tracks, playlist_name = await resolve_tracks(query, name)
         for t in tracks:
             _remember_requester(gp, t)
         await gp.play_skip_many(tracks)
@@ -123,7 +104,8 @@ class Music(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
-        tracks, playlist_name = await _resolve_tracks(query, interaction.user)
+        name = getattr(interaction.user, "display_name", str(interaction.user))
+        tracks, playlist_name = await resolve_tracks(query, name)
         for t in tracks:
             _remember_requester(gp, t)
         await gp.play_next_many(tracks)
