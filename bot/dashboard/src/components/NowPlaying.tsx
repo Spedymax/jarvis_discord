@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlayerSnapshot } from "../ws";
-import { pause, resume, skip, stop, shuffle, seek, setVolume, setLoop } from "../player";
+import { pause, resume, skip, stop, shuffle, seek, setLoop } from "../player";
+import { IconPlay, IconPause, IconSkip, IconStop, IconLoop, IconShuffle } from "../icons";
 
 const LOOP_NEXT: Record<string, string> = { off: "track", track: "queue", queue: "off" };
-const fmt = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
+const fmt = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
 export default function NowPlaying({ guildId, snapshot }: { guildId: string; snapshot: PlayerSnapshot }) {
   const [pos, setPos] = useState(0);
@@ -16,7 +14,6 @@ export default function NowPlaying({ guildId, snapshot }: { guildId: string; sna
     base.current = { ms: snapshot.position_ms ?? 0, at: Date.now() };
     setPos(snapshot.position_ms ?? 0);
   }, [snapshot.position_ms, snapshot.current?.identifier]);
-
   useEffect(() => {
     if (snapshot.paused || !snapshot.active) return;
     const id = setInterval(() => setPos(base.current.ms + (Date.now() - base.current.at)), 500);
@@ -24,47 +21,62 @@ export default function NowPlaying({ guildId, snapshot }: { guildId: string; sna
   }, [snapshot.paused, snapshot.active, snapshot.current?.identifier]);
 
   if (!snapshot.active || !snapshot.current) {
-    return <div className="rounded-lg bg-discord-card p-6 text-discord-muted">Бот сейчас не играет.</div>;
+    return (
+      <div className="card grid place-items-center p-12 text-center">
+        <div className="text-4xl">🎧</div>
+        <div className="mt-3 font-semibold">Ничего не играет</div>
+        <div className="text-sm text-muted">Найди трек ниже или запусти музыку в Discord.</div>
+      </div>
+    );
   }
+
   const cur = snapshot.current;
   const len = cur.length_ms || 1;
+  const pct = Math.min(100, (pos / len) * 100);
 
   return (
-    <div className="rounded-lg bg-discord-card p-4">
-      <div className="flex gap-4">
-        {cur.artwork ? (
-          <img src={cur.artwork} alt="" className="h-24 w-24 rounded object-cover" />
-        ) : (
-          <div className="flex h-24 w-24 items-center justify-center rounded bg-discord-dark text-2xl">🎵</div>
-        )}
+    <div className="card relative overflow-hidden p-6">
+      {/* ambient blurred artwork */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-accent/30 to-accent2/20" />
+      {cur.artwork && (
+        <div className="absolute inset-0 -z-10 scale-110 bg-cover bg-center opacity-25 blur-2xl"
+          style={{ backgroundImage: `url(${cur.artwork})` }} />
+      )}
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="h-40 w-40 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-accent to-accent2 shadow-panel">
+          {cur.artwork && <img src={cur.artwork} alt="" className="h-full w-full object-cover" />}
+        </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-lg font-semibold">{cur.title}</div>
-          <div className="truncate text-sm text-discord-muted">{cur.author}</div>
-          <div className="mt-3">
-            <input type="range" min={0} max={len} value={Math.min(pos, len)}
-              onChange={(e) => seek(guildId, Number(e.target.value))} className="w-full" />
-            <div className="flex justify-between text-xs text-discord-muted">
+          <div className="text-xs uppercase tracking-wide text-muted">Сейчас играет</div>
+          <div className="mt-1 truncate text-2xl font-bold">{cur.title}</div>
+          <div className="truncate text-muted">{cur.author ?? "—"}</div>
+          {cur.requester && <div className="mt-2 inline-block rounded-full bg-raised px-2 py-0.5 text-xs text-muted">по запросу {cur.requester}</div>}
+
+          <div className="mt-4">
+            <div className="relative h-1.5 w-full rounded-full bg-raised">
+              <div className="absolute h-1.5 rounded-full bg-gradient-to-r from-accent to-accent2" style={{ width: `${pct}%` }} />
+              <input type="range" min={0} max={len} value={Math.min(pos, len)}
+                onChange={(e) => seek(guildId, Number(e.target.value))}
+                className="absolute -top-1.5 h-4 w-full cursor-pointer opacity-0" />
+            </div>
+            <div className="mt-1 flex justify-between text-xs text-muted">
               <span>{fmt(pos)}</span><span>{fmt(len)}</span>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button className="btn" onClick={() => (snapshot.paused ? resume(guildId) : pause(guildId))}>
-          {snapshot.paused ? "▶️" : "⏸️"}
-        </button>
-        <button className="btn" onClick={() => skip(guildId)}>⏭️</button>
-        <button className="btn" onClick={() => stop(guildId)}>⏹️</button>
-        <button className="btn" onClick={() => setLoop(guildId, LOOP_NEXT[snapshot.loop ?? "off"])}>
-          🔁 {snapshot.loop}
-        </button>
-        <button className="btn" onClick={() => shuffle(guildId)}>🔀</button>
-        <label className="ml-auto flex items-center gap-2 text-sm text-discord-muted">
-          🔊
-          <input type="range" min={0} max={150} defaultValue={snapshot.volume ?? 100}
-            onMouseUp={(e) => setVolume(guildId, Number((e.target as HTMLInputElement).value))} />
-        </label>
+          <div className="mt-4 flex items-center gap-2">
+            <button className="icon-btn" onClick={() => setLoop(guildId, LOOP_NEXT[snapshot.loop ?? "off"])} title={`loop: ${snapshot.loop}`}>
+              <IconLoop className={`h-5 w-5 ${snapshot.loop !== "off" ? "text-accent2" : ""}`} />
+            </button>
+            <button className="flex h-12 w-12 items-center justify-center rounded-full text-white" style={{ background: "var(--accent-grad)" }}
+              onClick={() => (snapshot.paused ? resume(guildId) : pause(guildId))}>
+              {snapshot.paused ? <IconPlay className="h-6 w-6" /> : <IconPause className="h-6 w-6" />}
+            </button>
+            <button className="icon-btn" onClick={() => skip(guildId)}><IconSkip /></button>
+            <button className="icon-btn" onClick={() => shuffle(guildId)} title="shuffle"><IconShuffle /></button>
+            <button className="icon-btn text-danger hover:text-danger" onClick={() => stop(guildId)} title="stop"><IconStop /></button>
+          </div>
+        </div>
       </div>
     </div>
   );

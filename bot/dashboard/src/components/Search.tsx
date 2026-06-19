@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { TrackV } from "../ws";
 import { play, search } from "../player";
+import { IconSearch, IconPlay, IconPlus } from "../icons";
 
 export default function Search({ guildId }: { guildId: string }) {
   const [q, setQ] = useState("");
@@ -10,32 +11,37 @@ export default function Search({ guildId }: { guildId: string }) {
   const run = async () => {
     if (!q.trim()) return;
     setBusy(true);
-    try {
-      setResults(await search(guildId, q));
-    } finally {
-      setBusy(false);
-    }
+    try { setResults(await search(guildId, q)); } finally { setBusy(false); }
   };
 
   return (
-    <div className="mt-6">
-      <div className="flex gap-2">
+    <div className="card p-3">
+      <div className="flex items-center gap-2 rounded-lg bg-raised px-3">
+        <IconSearch className="h-4 w-4 text-muted" />
         <input value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
           placeholder="Поиск или ссылка YouTube/Spotify…"
-          className="flex-1 rounded bg-discord-card p-2 text-discord-text" />
-        <button className="btn" onClick={run} disabled={busy}>{busy ? "…" : "🔍"}</button>
+          className="flex-1 bg-transparent py-2 text-sm text-text outline-none placeholder:text-muted" />
+        <button className="btn-primary px-3 py-1.5" onClick={run} disabled={busy}>{busy ? "…" : "Найти"}</button>
       </div>
-      <ul className="mt-2 space-y-1">
-        {results.map((t, i) => (
-          <li key={`${t.identifier}-${i}`} className="flex items-center gap-2 rounded bg-discord-card px-3 py-2 text-sm">
-            <span className="min-w-0 flex-1 truncate">{t.title} <span className="text-discord-muted">— {t.author}</span></span>
-            <button className="btn" title="Играть сейчас" onClick={() => play(guildId, t.uri ?? t.title, "skip")}>▶️</button>
-            <button className="btn" title="Следующим" onClick={() => play(guildId, t.uri ?? t.title, "next")}>⤵️</button>
-            <button className="btn" title="В очередь" onClick={() => play(guildId, t.uri ?? t.title, "enqueue")}>➕</button>
-          </li>
-        ))}
-      </ul>
+      {results.length > 0 && (
+        <ul className="mt-2 space-y-0.5">
+          {results.map((t, i) => (
+            <li key={`${t.identifier}-${i}`} className="group flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-raised">
+              <div className="h-9 w-9 shrink-0 overflow-hidden rounded bg-gradient-to-br from-accent to-accent2">
+                {t.artwork && <img src={t.artwork} alt="" className="h-full w-full object-cover" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{t.title}</div>
+                <div className="truncate text-xs text-muted">{t.author ?? "—"}</div>
+              </div>
+              <button className="icon-btn h-8 w-8" title="Играть сейчас" onClick={() => play(guildId, t.uri ?? t.title, "skip")}><IconPlay className="h-4 w-4" /></button>
+              <button className="btn px-2 py-1 text-xs" title="Следующим" onClick={() => play(guildId, t.uri ?? t.title, "next")}>след</button>
+              <button className="icon-btn h-8 w-8" title="В очередь" onClick={() => play(guildId, t.uri ?? t.title, "enqueue")}><IconPlus className="h-4 w-4" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
