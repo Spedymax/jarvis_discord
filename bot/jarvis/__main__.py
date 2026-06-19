@@ -449,6 +449,19 @@ async def restore_players(bot: commands.Bot) -> None:
                         sentry_sdk.capture_exception()
 
 
+async def _maybe_start_dashboard(bot, settings, *, started_at):
+    """Start the web dashboard if enabled. Returns the AppRunner or None."""
+    if not settings.dashboard_enabled:
+        return None
+    from .web.server import start_dashboard
+    try:
+        return await start_dashboard(bot, settings, started_at=started_at)
+    except Exception:
+        log.exception("Failed to start dashboard")
+        sentry_sdk.capture_exception()
+        return None
+
+
 async def main() -> None:
     settings = Settings.from_env()
     setup_logging(settings.log_dir, settings.log_level)
@@ -484,6 +497,8 @@ async def main() -> None:
             pass
 
     async with bot:
+        import time as _t
+        dash_runner = await _maybe_start_dashboard(bot, settings, started_at=int(_t.time()))
         bot_task = asyncio.create_task(bot.start(settings.discord_token))
         stop_task = asyncio.create_task(stop_event.wait())
         done, pending = await asyncio.wait(
@@ -492,6 +507,8 @@ async def main() -> None:
         if stop_event.is_set():
             await _flush_all()
             await bot.close()
+        if dash_runner is not None:
+            await dash_runner.cleanup()
         for t in pending:
             t.cancel()
         for t in done:
