@@ -9,7 +9,7 @@ import aiohttp
 from aiohttp import web
 
 from .. import state
-from ..track_resolver import resolve_tracks
+from ..track_resolver import resolve_tracks, search_tracks
 from . import auth, serializers
 from .events import broadcast_player
 from .permissions import Level
@@ -108,12 +108,8 @@ async def api_search(request: web.Request) -> web.Response:
     q = request.query.get("q", "").strip()
     if not q:
         return web.json_response({"results": []})
-    from ..errors import TrackNotFoundError
-    try:
-        tracks, _ = await resolve_tracks(q, request["user"].get("username", ""))
-    except TrackNotFoundError:
-        return web.json_response({"results": []})
-    return web.json_response({"results": [serializers.track_view(t) for t in tracks[:8]]})
+    tracks = await search_tracks(q, 8)
+    return web.json_response({"results": [serializers.track_view(t) for t in tracks]})
 
 
 async def _require_control(request: web.Request, gid: str):
@@ -165,6 +161,7 @@ async def cmd_stop(request):
     gp.loop_mode = "off"
     gp.wl.queue.clear()
     await gp.wl.skip(force=True)
+    gp.current_track = None
     return await _ok(gp)
 
 

@@ -181,6 +181,7 @@ def build_bot(settings: Settings) -> commands.Bot:
                 return
             await gp.handle_track_end(payload.track)
             if not gp.wl.playing and not gp.wl.queue:
+                gp.current_track = None
                 gp.start_idle_timer()
                 gp.cancel_position_ticker()
             await broadcast_player(gp)

@@ -63,9 +63,9 @@ async def test_player_forbidden_other_guild(monkeypatch):
 
 
 async def test_search(monkeypatch):
-    async def fake_resolve(q, name):
-        return [make_track("R1"), make_track("R2")], None
-    monkeypatch.setattr("jarvis.web.server.resolve_tracks", fake_resolve)
+    async def fake_search(q, limit=8):
+        return [make_track("R1"), make_track("R2")]
+    monkeypatch.setattr("jarvis.web.server.search_tracks", fake_search)
     client = await _client()
     try:
         client.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("viewer")})
