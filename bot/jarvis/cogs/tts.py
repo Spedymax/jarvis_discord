@@ -18,7 +18,7 @@ from .sound import SOUNDS_DIR, _ensure_voice, _search_local
 log = logging.getLogger(__name__)
 
 MAX_TEXT_LEN = 200
-TTS_VOICE = "ru-RU-SvetlanaNeural"
+TTS_VOICE = "ru-RU-DmitryNeural"
 TTS_DIR = SOUNDS_DIR / "_tts"
 TTS_FILE_TTL_SECONDS = 300
 
