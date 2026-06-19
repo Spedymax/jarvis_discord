@@ -23,6 +23,13 @@ class Settings:
     sentry_dsn: str
     environment: str
     git_sha: str
+    dashboard_enabled: bool
+    dashboard_port: int
+    dashboard_base_url: str
+    dashboard_session_secret: str
+    discord_client_id: str
+    discord_client_secret: str
+    dashboard_static_dir: Path
 
     @staticmethod
     def from_env() -> "Settings":
@@ -41,6 +48,13 @@ class Settings:
             sentry_dsn=os.environ.get("SENTRY_DSN", "").strip(),
             environment=os.environ.get("ENVIRONMENT", "prod").strip() or "prod",
             git_sha=os.environ.get("GIT_SHA", "").strip(),
+            dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "").strip() in ("1", "true", "True", "yes"),
+            dashboard_port=int(os.environ.get("DASHBOARD_PORT", "8099")),
+            dashboard_base_url=os.environ.get("DASHBOARD_BASE_URL", "http://localhost:8099").strip(),
+            dashboard_session_secret=os.environ.get("DASHBOARD_SESSION_SECRET", "").strip(),
+            discord_client_id=os.environ.get("DISCORD_CLIENT_ID", "").strip(),
+            discord_client_secret=os.environ.get("DISCORD_CLIENT_SECRET", "").strip(),
+            dashboard_static_dir=Path(os.environ.get("DASHBOARD_STATIC_DIR", "/app/web-static")),
         )
 
 
