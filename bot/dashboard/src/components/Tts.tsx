@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { errMsg, getVoices, speak, type VoiceV } from "../sounds";
+import { IconMic } from "../icons";
 
 export default function Tts({ guildId }: { guildId: string }) {
   const [voices, setVoices] = useState<VoiceV[]>([]);
@@ -8,10 +9,7 @@ export default function Tts({ guildId }: { guildId: string }) {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    getVoices(guildId).then((vs) => {
-      setVoices(vs);
-      if (vs.length) setVoice(vs[0].id);
-    });
+    getVoices(guildId).then((vs) => { setVoices(vs); if (vs.length) setVoice(vs[0].id); });
   }, [guildId]);
 
   const say = async () => {
@@ -20,17 +18,19 @@ export default function Tts({ guildId }: { guildId: string }) {
   };
 
   return (
-    <div className="mt-4 rounded-lg bg-discord-card p-4">
-      {msg && <div className="mb-2 text-sm text-discord-muted">{msg}</div>}
-      <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={200}
-        placeholder="Что сказать (до 200 символов)…" rows={3}
-        className="w-full rounded bg-discord-dark p-2 text-discord-text" />
-      <div className="mt-2 flex gap-2">
-        <select value={voice} onChange={(e) => setVoice(e.target.value)}
-          className="flex-1 rounded bg-discord-dark p-2 text-sm">
+    <div className="card space-y-3 p-5">
+      <div className="flex items-center gap-2 font-semibold"><IconMic className="h-5 w-5 text-accent2" /> Озвучка текста</div>
+      {msg && <div className="rounded-lg bg-raised px-3 py-2 text-sm text-muted">{msg}</div>}
+      <div className="relative">
+        <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={200} rows={4}
+          placeholder="Что сказать…" className="input resize-none" />
+        <span className="absolute bottom-2 right-3 text-xs text-muted">{text.length}/200</span>
+      </div>
+      <div className="flex gap-2">
+        <select value={voice} onChange={(e) => setVoice(e.target.value)} className="input">
           {voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
         </select>
-        <button className="btn" onClick={say}>🗣 Сказать</button>
+        <button className="btn-primary shrink-0" onClick={say}>🗣 Сказать</button>
       </div>
     </div>
   );
