@@ -15,10 +15,12 @@ export default function Search({ guildId }: { guildId: string }) {
     try { setResults(await search(guildId, q)); } finally { setBusy(false); }
   };
 
-  const doPlay = async (t: TrackV, mode: "skip" | "next" | "enqueue") => {
-    try { await play(guildId, t.uri ?? t.title, mode); setMsg(""); }
+  const doPlayQuery = async (query: string, mode: "skip" | "next" | "enqueue") => {
+    try { await play(guildId, query, mode); setMsg(""); }
     catch { setMsg("Зайди в голосовой канал, чтобы играть."); }
   };
+  const doPlay = (t: TrackV, mode: "skip" | "next" | "enqueue") => doPlayQuery(t.uri ?? t.title, mode);
+  const isUrl = /^https?:\/\//i.test(q.trim());
 
   return (
     <div className="card p-3">
@@ -30,6 +32,13 @@ export default function Search({ guildId }: { guildId: string }) {
           className="flex-1 bg-transparent py-2 text-sm text-text outline-none placeholder:text-muted" />
         <button className="btn-primary px-3 py-1.5" onClick={run} disabled={busy}>{busy ? "…" : "Найти"}</button>
       </div>
+      {isUrl && (
+        <div className="mt-2 flex items-center gap-2 rounded-lg bg-raised px-3 py-2 text-sm">
+          <span className="flex-1 truncate text-muted">Ссылка — добавить целиком (плейлист/альбом):</span>
+          <button className="btn-primary px-3 py-1" onClick={() => doPlayQuery(q.trim(), "skip")}>▶ Играть</button>
+          <button className="btn px-3 py-1" onClick={() => doPlayQuery(q.trim(), "enqueue")}>➕ В очередь</button>
+        </div>
+      )}
       {msg && <div className="mt-2 text-xs text-muted">{msg}</div>}
       {results.length > 0 && (
         <ul className="mt-2 space-y-0.5">
