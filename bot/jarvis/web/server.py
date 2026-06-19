@@ -9,7 +9,10 @@ import aiohttp
 from aiohttp import web
 
 from .. import state
+from ..track_resolver import resolve_tracks
 from . import auth, serializers
+from .events import broadcast_player
+from .permissions import Level
 from .ws import WsHub, get_hub
 
 log = logging.getLogger(__name__)
@@ -79,6 +82,38 @@ async def api_guild_health(request: web.Request) -> web.Response:
         lavalink_connected=_lavalink_connected(),
     )
     return web.json_response(snap)
+
+
+def _guild_in_session(request: web.Request, gid: str) -> dict | None:
+    for g in request["user"].get("guilds", []):
+        if g["id"] == gid:
+            return g
+    return None
+
+
+async def api_player(request: web.Request) -> web.Response:
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    gp = state.get(int(gid))
+    if gp is None:
+        return web.json_response({"active": False})
+    return web.json_response(serializers.player_view(gp))
+
+
+async def api_search(request: web.Request) -> web.Response:
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    q = request.query.get("q", "").strip()
+    if not q:
+        return web.json_response({"results": []})
+    from ..errors import TrackNotFoundError
+    try:
+        tracks, _ = await resolve_tracks(q, request["user"].get("username", ""))
+    except TrackNotFoundError:
+        return web.json_response({"results": []})
+    return web.json_response({"results": [serializers.track_view(t) for t in tracks[:8]]})
 
 
 async def auth_login(request: web.Request) -> web.Response:
@@ -177,6 +212,8 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_get("/api/me", api_me)
     app.router.add_get("/api/guilds", api_guilds)
     app.router.add_get("/api/guilds/{gid}/health", api_guild_health)
+    app.router.add_get("/api/guilds/{gid}/player", api_player)
+    app.router.add_get("/api/guilds/{gid}/search", api_search)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
     app.router.add_post("/api/logout", api_logout)
