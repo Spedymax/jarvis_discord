@@ -1,9 +1,10 @@
 import type { Me } from "../api";
-import { IconPlay, IconBoard, IconMic, IconChart, IconGear, IconLogout } from "../icons";
+import { IconHome, IconPlay, IconBoard, IconMic, IconChart, IconGear, IconLogout } from "../icons";
 
-export type Tab = "player" | "sound" | "tts" | "stats" | "admin";
+export type Tab = "overview" | "player" | "sound" | "tts" | "stats" | "admin";
 
 export const NAV: { id: Tab; label: string; Icon: (p: { className?: string }) => JSX.Element; admin?: boolean }[] = [
+  { id: "overview", label: "Главная", Icon: IconHome },
   { id: "player", label: "Плеер", Icon: IconPlay },
   { id: "sound", label: "Саундборд", Icon: IconBoard },
   { id: "tts", label: "TTS", Icon: IconMic },

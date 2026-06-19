@@ -12,11 +12,12 @@ import Soundboard from "./components/Soundboard";
 import Tts from "./components/Tts";
 import Stats from "./components/Stats";
 import Admin from "./components/Admin";
+import Overview from "./components/Overview";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [guildId, setGuildId] = useState("");
-  const [tab, setTab] = useState<Tab>("player");
+  const [tab, setTab] = useState<Tab>("overview");
   const [snap, setSnap] = useState<PlayerSnapshot>({ active: false });
   const [pos, setPos] = useState(0);
 
@@ -73,6 +74,7 @@ export default function App() {
       mobileNav={mobileNav}
       bar={<PlayerBar guildId={guildId} snap={snap} pos={pos} onSnap={setSnap} />}
     >
+      {tab === "overview" && <Overview guildId={guildId} snapshot={snap} onSnap={setSnap} />}
       {tab === "player" && (
         <div className="mx-auto max-w-4xl space-y-4">
           <NowPlaying guildId={guildId} snapshot={snap} onSnap={setSnap} />
