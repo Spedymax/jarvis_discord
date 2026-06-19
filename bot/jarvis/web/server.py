@@ -315,6 +315,29 @@ async def cmd_sound_delete(request):
     return web.json_response({"ok": True})
 
 
+async def cmd_sound_play(request):
+    bot, username, err = await _require_sound_control(request, request.match_info["gid"])
+    if err:
+        return err
+    from .. import db
+    from ..cogs.sound import ensure_voice_for_member, play_sound_core
+    from ..hotkeys import find_member_in_voice
+    gid = int(request.match_info["gid"])
+    sound = await db.get_sound_by_id(int(request.match_info["id"]))
+    if sound is None:
+        return web.json_response({"error": "not_found"}, status=404)
+    member = find_member_in_voice(bot, int(request["user"]["user_id"]), gid)
+    if member is None:
+        return web.json_response({"error": "not_in_voice"}, status=409)
+    gp = await ensure_voice_for_member(member)
+    if gp is None:
+        return web.json_response({"error": "bot_busy"}, status=409)
+    ok = await play_sound_core(gp, sound, username)
+    if not ok:
+        return web.json_response({"error": "play_failed"}, status=422)
+    return web.json_response({"ok": True})
+
+
 async def cmd_queue_remove(request):
     gp, err = await _require_control(request, request.match_info["gid"])
     if err:
@@ -460,6 +483,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/rename", cmd_sound_rename)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/volume", cmd_sound_volume)
     app.router.add_post("/api/guilds/{gid}/sounds/{id}/delete", cmd_sound_delete)
+    app.router.add_post("/api/guilds/{gid}/sounds/{id}/play", cmd_sound_play)
     app.router.add_get("/auth/discord/login", auth_login)
     app.router.add_get("/auth/discord/callback", auth_callback)
     app.router.add_post("/api/logout", api_logout)
