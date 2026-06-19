@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { getMe, logout, type Me } from "./api";
 import { connectPlayerWs, type PlayerSnapshot } from "./ws";
 import { getPlayer } from "./player";
+import Layout from "./components/Layout";
+import Sidebar, { NAV, type Tab } from "./components/Sidebar";
+import PlayerBar from "./components/PlayerBar";
 import NowPlaying from "./components/NowPlaying";
 import Queue from "./components/Queue";
 import Search from "./components/Search";
@@ -12,77 +15,75 @@ import Admin from "./components/Admin";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [guildId, setGuildId] = useState<string>("");
-  const [tab, setTab] = useState<"player" | "sound" | "tts" | "stats" | "admin">("player");
+  const [guildId, setGuildId] = useState("");
+  const [tab, setTab] = useState<Tab>("player");
+  const [snap, setSnap] = useState<PlayerSnapshot>({ active: false });
+  const [pos, setPos] = useState(0);
 
   useEffect(() => { getMe().then(setMe).catch(() => setMe(null)); }, []);
+  useEffect(() => { if (me && me.guilds.length && !guildId) setGuildId(me.guilds[0].id); }, [me, guildId]);
   useEffect(() => {
-    if (me && me.guilds.length && !guildId) setGuildId(me.guilds[0].id);
-  }, [me, guildId]);
+    if (!guildId) return;
+    getPlayer(guildId).then(setSnap).catch(() => setSnap({ active: false }));
+    return connectPlayerWs(guildId, setSnap);
+  }, [guildId]);
+  useEffect(() => { setPos(snap.position_ms ?? 0); }, [snap.position_ms, snap.current?.identifier]);
+  useEffect(() => {
+    if (!snap.active || snap.paused) return;
+    const base = { ms: snap.position_ms ?? 0, at: Date.now() };
+    const id = setInterval(() => setPos(base.ms + (Date.now() - base.at)), 500);
+    return () => clearInterval(id);
+  }, [snap.active, snap.paused, snap.position_ms, snap.current?.identifier]);
 
-  if (me === undefined) return <div className="p-8 text-discord-muted">Загрузка…</div>;
+  if (me === undefined) return <div className="grid h-screen place-items-center text-muted">Загрузка…</div>;
   if (me === null) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <a href="/auth/discord/login" className="rounded-md bg-discord-blurple px-6 py-3 font-semibold text-white">
-          Войти через Discord
-        </a>
+      <div className="grid h-screen place-items-center bg-bg">
+        <div className="flex flex-col items-center gap-6">
+          <div className="bg-gradient-to-r from-accent to-accent2 bg-clip-text text-4xl font-extrabold text-transparent">Jarvis</div>
+          <a href="/auth/discord/login" className="btn-primary px-8 py-3 text-base">Войти через Discord</a>
+        </div>
       </div>
     );
   }
 
   const isAdmin = me.guilds.find((g) => g.id === guildId)?.level === "admin";
 
-  return (
-    <div className="mx-auto max-w-3xl p-6">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Jarvis Dashboard</h1>
-        <div className="flex items-center gap-3 text-sm text-discord-muted">
-          <span>{me.username}</span>
-          <button onClick={() => logout().then(() => location.reload())} className="rounded bg-discord-card px-3 py-1">Выйти</button>
-        </div>
-      </header>
-
-      <label className="mb-4 block text-sm text-discord-muted">
-        Сервер
-        <select value={guildId} onChange={(e) => setGuildId(e.target.value)}
-          className="mt-1 block w-full rounded bg-discord-card p-2 text-discord-text">
-          {me.guilds.map((g) => (
-            <option key={g.id} value={g.id}>{g.name} ({g.level})</option>
-          ))}
+  const mobileNav = (
+    <div className="flex flex-col gap-2 border-b border-border bg-surface p-3">
+      <div className="flex items-center justify-between">
+        <span className="bg-gradient-to-r from-accent to-accent2 bg-clip-text text-xl font-extrabold text-transparent">Jarvis</span>
+        <select value={guildId} onChange={(e) => setGuildId(e.target.value)} className="input max-w-[55%]">
+          {me.guilds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-      </label>
-
-      <nav className="mb-4 flex gap-2">
-        <button className={`btn ${tab === "player" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("player")}>Плеер</button>
-        <button className={`btn ${tab === "sound" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("sound")}>Саундборд</button>
-        <button className={`btn ${tab === "tts" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("tts")}>TTS</button>
-        <button className={`btn ${tab === "stats" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("stats")}>Статистика</button>
-        {isAdmin && <button className={`btn ${tab === "admin" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("admin")}>Админ</button>}
+      </div>
+      <nav className="flex gap-1 overflow-x-auto">
+        {NAV.filter((n) => !n.admin || isAdmin).map(({ id, label, Icon }) => (
+          <button key={id} onClick={() => setTab(id)} className={`pill w-auto shrink-0 ${tab === id ? "pill-active" : ""}`}>
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
       </nav>
-      {tab === "player" && <PlayerPanel guildId={guildId} />}
-      {tab === "sound" && <Soundboard guildId={guildId} />}
-      {tab === "tts" && <Tts guildId={guildId} />}
-      {tab === "stats" && <Stats guildId={guildId} />}
-      {tab === "admin" && isAdmin && <Admin guildId={guildId} />}
     </div>
   );
-}
 
-function PlayerPanel({ guildId }: { guildId: string }) {
-  const [snap, setSnap] = useState<PlayerSnapshot>({ active: false });
-  useEffect(() => {
-    if (!guildId) return;
-    getPlayer(guildId).then(setSnap).catch(() => setSnap({ active: false }));
-    const disconnect = connectPlayerWs(guildId, setSnap);
-    return disconnect;
-  }, [guildId]);
-  if (!guildId) return null;
   return (
-    <div className="mt-4">
-      <NowPlaying guildId={guildId} snapshot={snap} />
-      <Search guildId={guildId} />
-      <Queue guildId={guildId} snapshot={snap} />
-    </div>
+    <Layout
+      sidebar={<Sidebar me={me} guildId={guildId} setGuildId={setGuildId} tab={tab} setTab={setTab} isAdmin={isAdmin} onLogout={() => logout().then(() => location.reload())} />}
+      mobileNav={mobileNav}
+      bar={<PlayerBar guildId={guildId} snap={snap} pos={pos} />}
+    >
+      {tab === "player" && (
+        <div className="mx-auto max-w-4xl space-y-4">
+          <NowPlaying guildId={guildId} snapshot={snap} />
+          <Search guildId={guildId} />
+          <Queue guildId={guildId} snapshot={snap} />
+        </div>
+      )}
+      {tab === "sound" && <div className="mx-auto max-w-4xl"><Soundboard guildId={guildId} /></div>}
+      {tab === "tts" && <div className="mx-auto max-w-xl"><Tts guildId={guildId} /></div>}
+      {tab === "stats" && <div className="mx-auto max-w-4xl"><Stats guildId={guildId} /></div>}
+      {tab === "admin" && isAdmin && <div className="mx-auto max-w-4xl"><Admin guildId={guildId} /></div>}
+    </Layout>
   );
 }
