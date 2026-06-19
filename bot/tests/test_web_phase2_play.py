@@ -47,6 +47,32 @@ async def test_play_not_in_voice(monkeypatch):
         await c.close()
 
 
+async def test_sound_stop(monkeypatch):
+    gp = MagicMock(); gp.playing_sound = True; gp.wl = MagicMock(); gp.wl.skip = AsyncMock()
+    monkeypatch.setattr("jarvis.state.get", lambda gid: gp)
+    c = await _client()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("admin")})
+        resp = await c.post("/api/guilds/1/sounds/stop")
+        assert resp.status == 200
+        assert (await resp.json())["stopped"] is True
+        gp.wl.skip.assert_awaited_once()
+    finally:
+        await c.close()
+
+
+async def test_sound_stop_nothing(monkeypatch):
+    monkeypatch.setattr("jarvis.state.get", lambda gid: None)
+    c = await _client()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie("admin")})
+        resp = await c.post("/api/guilds/1/sounds/stop")
+        assert resp.status == 200
+        assert (await resp.json())["stopped"] is False
+    finally:
+        await c.close()
+
+
 async def test_play_ok(monkeypatch):
     monkeypatch.setattr("jarvis.db.get_sound_by_id", AsyncMock(return_value=_snd()))
     monkeypatch.setattr("jarvis.hotkeys.find_member_in_voice", lambda b, u, g=None: MagicMock())

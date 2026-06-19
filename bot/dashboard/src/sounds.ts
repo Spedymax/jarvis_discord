@@ -15,6 +15,7 @@ export async function getSounds(g: string): Promise<SoundV[]> {
   return (await r.json()).sounds as SoundV[];
 }
 export const playSound = (g: string, id: number) => jpost(g, `sounds/${id}/play`);
+export const stopSound = (g: string) => jpost(g, "sounds/stop");
 export const renameSound = (g: string, id: number, name: string) => jpost(g, `sounds/${id}/rename`, { name });
 export const setSoundVolume = (g: string, id: number, volume: number) => jpost(g, `sounds/${id}/volume`, { volume });
 export const deleteSound = (g: string, id: number) => jpost(g, `sounds/${id}/delete`);
