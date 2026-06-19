@@ -238,6 +238,14 @@ class GuildPlayer:
             updated_at=updated_at,
         )
 
+    async def _emit_ws(self) -> None:
+        """Push a live player snapshot to dashboard WS subscribers (best-effort)."""
+        try:
+            from .web.events import broadcast_player
+            await broadcast_player(self)
+        except Exception:
+            log.debug("emit_ws failed", exc_info=True)
+
     def touch_persist(self) -> None:
         """Schedule a debounced state save. Idempotent within PERSIST_DEBOUNCE_SECONDS."""
         if self.persist_task is not None and not self.persist_task.done():
@@ -269,5 +277,6 @@ class GuildPlayer:
             while True:
                 await asyncio.sleep(self.POSITION_TICK_SECONDS)
                 self.touch_persist()
+                await self._emit_ws()
         except asyncio.CancelledError:
             return

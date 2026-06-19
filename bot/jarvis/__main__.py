@@ -20,6 +20,7 @@ from .observability import init_sentry
 from .persistence import save_player_state
 from .ui.card import BG_EXT, BG_POOL_DIR, build_card_file, pick_background
 from .ui.controls import ControlsView
+from .web.events import broadcast_player
 
 log = logging.getLogger("jarvis")
 
@@ -124,6 +125,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
             gp.start_position_ticker()
             gp.touch_persist()
+            await broadcast_player(gp)
         except Exception:
             sentry_sdk.capture_exception()
             raise
@@ -169,6 +171,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             if not gp.wl.playing and not gp.wl.queue:
                 gp.start_idle_timer()
                 gp.cancel_position_ticker()
+            await broadcast_player(gp)
         except Exception:
             sentry_sdk.capture_exception()
             raise
