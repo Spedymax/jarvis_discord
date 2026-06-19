@@ -67,6 +67,15 @@ def track_view(track, requesters: dict[str, str] | None = None) -> dict[str, Any
     }
 
 
+def stats_view(total: int, tracks: list, requesters: list, sounds: list) -> dict[str, Any]:
+    return {
+        "total_plays": total,
+        "top_tracks": tracks,
+        "top_requesters": requesters,
+        "top_sounds": [{"name": s.name, "play_count": s.play_count} for s in sounds],
+    }
+
+
 def sound_view(s) -> dict[str, Any]:
     return {
         "id": s.id,
