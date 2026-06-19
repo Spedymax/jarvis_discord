@@ -1,22 +1,19 @@
 import { useEffect, useState } from "react";
-import { getHealth, getMe, logout, type Health, type Me } from "./api";
+import { getMe, logout, type Me } from "./api";
+import { connectPlayerWs, type PlayerSnapshot } from "./ws";
+import { getPlayer } from "./player";
+import NowPlaying from "./components/NowPlaying";
+import Queue from "./components/Queue";
+import Search from "./components/Search";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [guildId, setGuildId] = useState<string>("");
-  const [health, setHealth] = useState<Health | null>(null);
 
   useEffect(() => { getMe().then(setMe).catch(() => setMe(null)); }, []);
   useEffect(() => {
     if (me && me.guilds.length && !guildId) setGuildId(me.guilds[0].id);
   }, [me, guildId]);
-  useEffect(() => {
-    if (!guildId) return;
-    const tick = () => getHealth(guildId).then(setHealth).catch(() => {});
-    tick();
-    const id = setInterval(tick, 5000);
-    return () => clearInterval(id);
-  }, [guildId]);
 
   if (me === undefined) return <div className="p-8 text-discord-muted">Загрузка…</div>;
   if (me === null) {
@@ -49,22 +46,25 @@ export default function App() {
         </select>
       </label>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Uptime" value={health ? `${Math.floor(health.uptime_seconds / 60)} мин` : "—"} />
-        <Stat label="Серверов" value={health ? `${health.guild_count}` : "—"} />
-        <Stat label="Активных плееров" value={health ? `${health.player_count}` : "—"} />
-        <Stat label="Lavalink" value={health ? (health.lavalink_connected ? "🟢" : "🔴") : "—"} />
-        <Stat label="Память" value={health ? `${health.memory_mb} MB` : "—"} />
-      </section>
+      <PlayerPanel guildId={guildId} />
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function PlayerPanel({ guildId }: { guildId: string }) {
+  const [snap, setSnap] = useState<PlayerSnapshot>({ active: false });
+  useEffect(() => {
+    if (!guildId) return;
+    getPlayer(guildId).then(setSnap).catch(() => setSnap({ active: false }));
+    const disconnect = connectPlayerWs(guildId, setSnap);
+    return disconnect;
+  }, [guildId]);
+  if (!guildId) return null;
   return (
-    <div className="rounded-lg bg-discord-card p-4">
-      <div className="text-xs uppercase text-discord-muted">{label}</div>
-      <div className="mt-1 text-lg font-semibold">{value}</div>
+    <div className="mt-4">
+      <NowPlaying guildId={guildId} snapshot={snap} />
+      <Search guildId={guildId} />
+      <Queue guildId={guildId} snapshot={snap} />
     </div>
   );
 }
