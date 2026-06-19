@@ -96,6 +96,33 @@ class GuildPlayer:
         for t in reversed(tracks):
             self.wl.queue.put_at(0, t)
 
+    def remove_at(self, index: int) -> Any | None:
+        """Pop and return the queued track at index. None if out of range."""
+        if index < 0 or index >= len(self.wl.queue):
+            return None
+        track = self.wl.queue[index]
+        self.wl.queue.delete(index)
+        return track
+
+    def move(self, src: int, dst: int) -> bool:
+        """Reorder the queue: move item from src to dst. False if src invalid."""
+        n = len(self.wl.queue)
+        if src < 0 or src >= n:
+            return False
+        track = self.wl.queue[src]
+        self.wl.queue.delete(src)
+        dst = max(0, min(dst, len(self.wl.queue)))
+        self.wl.queue.put_at(dst, track)
+        return True
+
+    async def jump_to(self, index: int) -> None:
+        """Drop the `index` tracks before position `index`, then skip so it plays next."""
+        for _ in range(max(0, index)):
+            if not self.wl.queue:
+                break
+            self.wl.queue.delete(0)
+        await self.wl.skip(force=True)
+
     async def handle_track_end(self, track: Any) -> None:
         """Called from on_wavelink_track_end. Decides what plays next."""
         if self.loop_mode == "track":

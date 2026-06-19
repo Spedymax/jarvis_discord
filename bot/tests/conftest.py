@@ -44,6 +44,19 @@ class FakeQueue:
         random.shuffle(items)
         self._items = deque(items)
 
+    def __getitem__(self, index: int) -> Any:
+        return list(self._items)[index]
+
+    def delete(self, index: int) -> None:
+        items = list(self._items)
+        del items[index]
+        self._items = deque(items)
+
+    def swap(self, a: int, b: int) -> None:
+        items = list(self._items)
+        items[a], items[b] = items[b], items[a]
+        self._items = deque(items)
+
     @property
     def items(self) -> list[Any]:
         return list(self._items)
