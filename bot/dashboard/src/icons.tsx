@@ -21,3 +21,4 @@ export const IconLogout = (p: P) => <S className={p.className} d="M9 21H5a2 2 0 
 export const IconTrash = (p: P) => <S className={p.className} d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />;
 export const IconPlus = (p: P) => <S className={p.className} d="M12 5v14M5 12h14" />;
 export const IconDrag = (p: P) => <S className={p.className} d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" />;
+export const IconHome = (p: P) => <S className={p.className} d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10" />;

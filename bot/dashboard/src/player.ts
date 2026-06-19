@@ -33,3 +33,6 @@ export const setFilters = (g: string, f: { bassboost?: string; effect?: string }
 export const queueRemove = (g: string, index: number) => post(g, "queue/remove", { index });
 export const queueMove = (g: string, from: number, to: number) => post(g, "queue/move", { from, to });
 export const queueJump = (g: string, index: number) => post(g, "queue/jump", { index });
+export const queueClear = (g: string) => post(g, "queue/clear");
+export const summon = (g: string) => fetch(`/api/guilds/${g}/summon`, { method: "POST" });
+export const leave = (g: string) => fetch(`/api/guilds/${g}/leave`, { method: "POST" });
