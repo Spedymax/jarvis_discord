@@ -3,3 +3,5 @@
 @tailwind utilities;
 
 body { @apply bg-discord-bg text-discord-text; }
+
+.btn { @apply rounded bg-discord-dark px-3 py-1 text-sm hover:bg-discord-blurple; }
