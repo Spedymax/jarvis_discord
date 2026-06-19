@@ -69,6 +69,8 @@ def make_track(title: str, identifier: str | None = None, length_ms: int = 180_0
     track.length = length_ms
     track.uri = f"https://example.test/{track.identifier}"
     track.author = "TestAuthor"
+    track.artwork = None
+    track.requester_name = None
     return track
 
 
