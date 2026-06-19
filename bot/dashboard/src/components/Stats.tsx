@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getStats, type Stats } from "../stats";
+import RecentList from "./RecentList";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -44,6 +45,28 @@ export default function Stats({ guildId }: { guildId: string }) {
         <Bars title="Топ треков" rows={s.top_tracks.map((t) => ({ label: `${t.title} — ${t.author ?? "—"}`, value: t.plays }))} />
         <Bars title="Топ реквестеров" rows={s.top_requesters.map((r) => ({ label: r.name, value: r.plays }))} />
         <Bars title="Топ звуков" rows={s.top_sounds.map((x) => ({ label: x.name, value: x.play_count }))} />
+      </div>
+
+      {s.by_day.length > 0 && (
+        <div className="card p-4">
+          <div className="mb-3 text-sm font-semibold text-muted">Проигрывания по дням</div>
+          <div className="flex h-32 items-end gap-1">
+            {(() => {
+              const max = Math.max(1, ...s.by_day.map((d) => d.plays));
+              return s.by_day.map((d, i) => (
+                <div key={i} className="flex flex-1 flex-col items-center gap-1" title={`${d.date}: ${d.plays}`}>
+                  <div className="w-full rounded-t bg-gradient-to-t from-accent to-accent2" style={{ height: `${(d.plays / max) * 100}%` }} />
+                  <span className="text-[9px] text-muted">{d.date.slice(5)}</span>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      <div className="card p-4">
+        <div className="mb-2 text-sm font-semibold text-muted">История</div>
+        <RecentList guildId={guildId} rows={s.recent} />
       </div>
     </div>
   );
