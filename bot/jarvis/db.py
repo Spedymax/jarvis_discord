@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiosqlite
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _DB_PATH: Path | None = None
 
@@ -72,6 +72,16 @@ async def init_db(path: Path) -> None:
                 guild_id           INTEGER PRIMARY KEY,
                 hotkey_channel_id  INTEGER,
                 hotkey_webhook_url TEXT
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dashboard_role_perms (
+                guild_id INTEGER NOT NULL,
+                role_id  INTEGER NOT NULL,
+                level    TEXT NOT NULL,
+                PRIMARY KEY (guild_id, role_id)
             )
             """
         )
@@ -257,3 +267,26 @@ async def get_hotkey_settings(guild_id: int) -> Optional[tuple[int, str]]:
         if row is None or row[0] is None or row[1] is None:
             return None
         return int(row[0]), str(row[1])
+
+
+async def set_role_perm(guild_id: int, role_id: int, level: str) -> None:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        await conn.execute(
+            """
+            INSERT INTO dashboard_role_perms (guild_id, role_id, level)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, role_id) DO UPDATE SET level = excluded.level
+            """,
+            (guild_id, role_id, level),
+        )
+        await conn.commit()
+
+
+async def get_role_perms(guild_id: int) -> dict[int, str]:
+    async with aiosqlite.connect(get_db_path()) as conn:
+        cur = await conn.execute(
+            "SELECT role_id, level FROM dashboard_role_perms WHERE guild_id = ?",
+            (guild_id,),
+        )
+        rows = await cur.fetchall()
+    return {int(r[0]): str(r[1]) for r in rows}
