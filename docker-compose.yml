@@ -35,6 +35,8 @@ services:
     environment:
       LAVALINK_HOST: lavalink
       LAVALINK_PORT: "2333"
+    ports:
+      - "127.0.0.1:8099:8099"
     volumes:
       - ./data:/app/data
       - ./logs/bot:/app/logs
