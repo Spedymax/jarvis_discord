@@ -67,6 +67,16 @@ def track_view(track, requesters: dict[str, str] | None = None) -> dict[str, Any
     }
 
 
+def sound_view(s) -> dict[str, Any]:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "length_ms": s.length_ms,
+        "volume": s.volume,
+        "play_count": s.play_count,
+    }
+
+
 def player_view(gp) -> dict[str, Any]:
     wl = gp.wl
     current = getattr(wl, "current", None) or gp.current_track
