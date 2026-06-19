@@ -306,7 +306,9 @@ async def api_stats(request):
     tracks = await db.top_tracks(g, 10)
     requesters = await db.top_requesters(g, 10)
     sounds = (await db.list_sounds(g))[:10]
-    return web.json_response(serializers.stats_view(total, tracks, requesters, sounds))
+    recent = await db.recent_plays(g, 15)
+    by_day = await db.plays_by_day(g, 14)
+    return web.json_response(serializers.stats_view(total, tracks, requesters, sounds, recent, by_day))
 
 
 async def cmd_sound_rename(request):
