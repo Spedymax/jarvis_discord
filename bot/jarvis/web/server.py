@@ -10,7 +10,7 @@ from aiohttp import web
 
 from .. import state
 from . import auth, serializers
-from .ws import WsHub
+from .ws import WsHub, get_hub
 
 log = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app["bot"] = bot
     app["settings"] = settings
     app["started_at"] = started_at
-    app["ws_hub"] = WsHub()
+    app["ws_hub"] = get_hub()
 
     app.router.add_get("/api/health-public", health_public)
     app.router.add_get("/api/me", api_me)
