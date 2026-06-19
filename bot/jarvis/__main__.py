@@ -117,6 +117,7 @@ def build_bot(settings: Settings) -> commands.Bot:
                     getattr(track, "author", None),
                     getattr(track, "requester_name", None),
                     int(_t.time()),
+                    getattr(track, "uri", None),
                 )
             except Exception:
                 log.debug("record_track_play failed", exc_info=True)
