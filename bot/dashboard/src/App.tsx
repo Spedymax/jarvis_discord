@@ -5,10 +5,12 @@ import { getPlayer } from "./player";
 import NowPlaying from "./components/NowPlaying";
 import Queue from "./components/Queue";
 import Search from "./components/Search";
+import Soundboard from "./components/Soundboard";
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [guildId, setGuildId] = useState<string>("");
+  const [tab, setTab] = useState<"player" | "sound">("player");
 
   useEffect(() => { getMe().then(setMe).catch(() => setMe(null)); }, []);
   useEffect(() => {
@@ -46,7 +48,11 @@ export default function App() {
         </select>
       </label>
 
-      <PlayerPanel guildId={guildId} />
+      <nav className="mb-4 flex gap-2">
+        <button className={`btn ${tab === "player" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("player")}>Плеер</button>
+        <button className={`btn ${tab === "sound" ? "bg-discord-blurple" : ""}`} onClick={() => setTab("sound")}>Саундборд</button>
+      </nav>
+      {tab === "player" ? <PlayerPanel guildId={guildId} /> : <Soundboard guildId={guildId} />}
     </div>
   );
 }
