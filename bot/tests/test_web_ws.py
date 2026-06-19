@@ -38,3 +38,11 @@ async def test_broadcast_drops_broken_ws():
     await hub.broadcast(123, {"type": "health"})
     good.send_json.assert_awaited_once()
     assert hub.count(123) == 1  # bad dropped
+
+
+def test_get_hub_singleton():
+    from jarvis.web.ws import WsHub, get_hub
+    a = get_hub()
+    b = get_hub()
+    assert a is b
+    assert isinstance(a, WsHub)

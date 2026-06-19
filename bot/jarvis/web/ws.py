@@ -30,3 +30,13 @@ class WsHub:
                 dead.append(ws)
         for ws in dead:
             self.unregister(guild_id, ws)
+
+
+_HUB: WsHub | None = None
+
+
+def get_hub() -> WsHub:
+    global _HUB
+    if _HUB is None:
+        _HUB = WsHub()
+    return _HUB
