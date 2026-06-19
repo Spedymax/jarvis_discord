@@ -49,3 +49,35 @@ def accessible_guilds(bot_guild_ids: set[int], oauth_guilds: list[dict]) -> list
             "level": level.to_str(),
         })
     return out
+
+
+def track_view(track, requesters: dict[str, str] | None = None) -> dict[str, Any]:
+    ident = getattr(track, "identifier", None)
+    requester = getattr(track, "requester_name", None)
+    if requester is None and requesters and ident:
+        requester = requesters.get(ident)
+    return {
+        "title": getattr(track, "title", "?"),
+        "author": getattr(track, "author", None),
+        "uri": getattr(track, "uri", None),
+        "artwork": getattr(track, "artwork", None),
+        "length_ms": int(getattr(track, "length", 0) or 0),
+        "identifier": ident,
+        "requester": requester,
+    }
+
+
+def player_view(gp) -> dict[str, Any]:
+    wl = gp.wl
+    current = getattr(wl, "current", None) or gp.current_track
+    return {
+        "active": True,
+        "paused": bool(getattr(wl, "paused", False)),
+        "position_ms": int(getattr(wl, "position", 0) or 0),
+        "volume": int(getattr(wl, "volume", 100) or 100),
+        "loop": gp.loop_mode,
+        "bassboost": gp.bassboost,
+        "effect": gp.effect,
+        "current": track_view(current, gp.requesters) if current is not None else None,
+        "queue": [track_view(t, gp.requesters) for t in list(wl.queue)],
+    }
