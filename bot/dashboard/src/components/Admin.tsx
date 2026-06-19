@@ -26,15 +26,15 @@ export default function Admin({ guildId }: { guildId: string }) {
   }, [guildId]);
 
   return (
-    <div className="mt-4">
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Uptime" value={health ? `${Math.floor(health.uptime_seconds / 60)}м` : "—"} />
         <Stat label="Серверов" value={health ? `${health.guild_count}` : "—"} />
         <Stat label="Плееров" value={health ? `${health.player_count}` : "—"} />
         <Stat label="Lavalink" value={health ? (health.lavalink_connected ? "🟢" : "🔴") : "—"} />
         <Stat label="Память" value={health ? `${health.memory_mb}MB` : "—"} />
       </div>
-      <pre ref={pre} className="h-80 overflow-auto rounded-lg bg-discord-dark p-3 text-xs leading-relaxed text-discord-text">
+      <pre ref={pre} className="h-96 overflow-auto rounded-2xl border border-border bg-bg p-4 text-xs leading-relaxed text-green/80">
         {logs.join("\n")}
       </pre>
     </div>
@@ -43,9 +43,9 @@ export default function Admin({ guildId }: { guildId: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-discord-card p-3">
-      <div className="text-xs uppercase text-discord-muted">{label}</div>
-      <div className="mt-1 font-semibold">{value}</div>
+    <div className="card p-3">
+      <div className="text-xs uppercase text-muted">{label}</div>
+      <div className="mt-1 text-lg font-semibold">{value}</div>
     </div>
   );
 }
