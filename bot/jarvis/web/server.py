@@ -323,6 +323,16 @@ async def api_stats(request):
     return web.json_response(serializers.stats_view(total, tracks, requesters, sounds, recent, by_day))
 
 
+async def api_history(request):
+    gid = request.match_info["gid"]
+    if _guild_in_session(request, gid) is None:
+        return web.json_response({"error": "forbidden"}, status=403)
+    from .. import db
+    limit = min(max(int(request.query.get("limit", 500)), 1), 2000)
+    rows = await db.recent_plays(int(gid), limit)
+    return web.json_response({"rows": rows})
+
+
 async def cmd_sound_rename(request):
     bot, _, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
@@ -666,6 +676,7 @@ def create_app(bot, settings, *, started_at: int) -> web.Application:
     app.router.add_post("/api/guilds/{gid}/queue/move", cmd_queue_move)
     app.router.add_post("/api/guilds/{gid}/queue/jump", cmd_queue_jump)
     app.router.add_get("/api/guilds/{gid}/stats", api_stats)
+    app.router.add_get("/api/guilds/{gid}/history", api_history)
     app.router.add_get("/api/guilds/{gid}/voice", api_voice)
     app.router.add_post("/api/guilds/{gid}/summon", cmd_summon)
     app.router.add_post("/api/guilds/{gid}/queue/clear", cmd_queue_clear)

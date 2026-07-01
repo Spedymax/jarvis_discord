@@ -18,6 +18,12 @@ export async function getStats(g: string): Promise<Stats> {
   return r.json();
 }
 
+export async function getHistory(g: string, limit = 500): Promise<RecentPlay[]> {
+  const r = await fetch(`/api/guilds/${g}/history?limit=${limit}`);
+  if (!r.ok) throw new Error(`history ${r.status}`);
+  return (await r.json()).rows as RecentPlay[];
+}
+
 export async function getLogs(g: string, lines = 200): Promise<string[]> {
   const r = await fetch(`/api/guilds/${g}/logs?lines=${lines}`);
   if (!r.ok) return [];

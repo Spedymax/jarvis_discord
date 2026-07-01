@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PlayerSnapshot } from "../ws";
-import { getStats, type Stats } from "../stats";
+import { getStats, getHistory, type Stats, type RecentPlay } from "../stats";
 import { queueClear, leave, setVolume } from "../player";
 import { getSounds, playSound } from "../sounds";
 import Listeners from "./Listeners";
@@ -9,7 +9,10 @@ import { IconTrash, IconShuffle, IconVolume } from "../icons";
 
 export default function Overview({ guildId, snapshot, onSnap }: { guildId: string; snapshot: PlayerSnapshot; onSnap: (s: PlayerSnapshot) => void }) {
   const [s, setS] = useState<Stats | null>(null);
-  useEffect(() => { getStats(guildId).then(setS).catch(() => setS(null)); }, [guildId]);
+  const [history, setHistory] = useState<RecentPlay[] | null>(null);
+  useEffect(() => { getStats(guildId).then(setS).catch(() => setS(null)); setHistory(null); }, [guildId]);
+
+  const showAll = () => getHistory(guildId).then(setHistory).catch(() => {});
 
   const today = new Date().toISOString().slice(0, 10);
   const todayPlays = s?.by_day.find((d) => d.date === today)?.plays ?? 0;
@@ -63,8 +66,15 @@ export default function Overview({ guildId, snapshot, onSnap }: { guildId: strin
 
       {/* recent */}
       <div className="card p-4 md:col-span-2">
-        <div className="mb-2 text-sm font-semibold text-muted">Недавно играло</div>
-        <RecentList guildId={guildId} rows={s?.recent ?? []} limit={6} />
+        <div className="mb-2 flex items-center justify-between">
+          <div className="text-sm font-semibold text-muted">{history ? "Вся история" : "Недавно играло"}</div>
+          {history
+            ? <button className="btn px-2 py-1 text-xs" onClick={() => setHistory(null)}>Свернуть</button>
+            : <button className="btn px-2 py-1 text-xs" onClick={showAll}>Вся история</button>}
+        </div>
+        {history
+          ? <div className="max-h-96 overflow-y-auto"><RecentList guildId={guildId} rows={history} /></div>
+          : <RecentList guildId={guildId} rows={s?.recent ?? []} limit={6} />}
       </div>
     </div>
   );
