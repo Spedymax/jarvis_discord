@@ -29,6 +29,8 @@ plugins:
       - MUSIC
       - ANDROID_VR
       - WEB
+      - MWEB
+      - TVHTML5_SIMPLY
       - WEBEMBEDDED
 
 lavalink:
