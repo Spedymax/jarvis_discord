@@ -17,8 +17,10 @@ from ..errors import (
     WrongVoiceChannelError,
 )
 from ..player import GuildPlayer
-from ..track_resolver import resolve_tracks
+from ..sources import SourceKind, classify_query
+from ..track_resolver import resolve_tracks, search_tracks
 from ..ui.card import refresh_now_playing
+from ..ui.track_picker import PICKER_LIMIT, TrackPickerView
 
 log = logging.getLogger(__name__)
 
@@ -49,77 +51,86 @@ def _remember_requester(gp: GuildPlayer, track: wavelink.Playable) -> None:
         gp.requesters[identifier] = name
 
 
+# (метод GuildPlayer, ответ на трек, ответ на плейлист, нужен ли ручной refresh карточки)
+_MODES = {
+    "queue": ("add_many", "➕ В очередь: **{title}**", "➕ Плейлист **{pl}** — {n} треков в очередь.", True),
+    "skip": ("play_skip_many", "⏭ Сейчас играет: **{title}**", "⏭ Плейлист **{pl}** — {n} треков, играет первый.", False),
+    "next": ("play_next_many", "⏩ Следующим: **{title}**", "⏩ Плейлист **{pl}** — {n} треков следом.", True),
+}
+
+
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(description="Поставить трек или плейлист в конец очереди.")
-    @app_commands.describe(query="Ссылка YouTube/SoundCloud/Spotify или название")
-    async def play(self, interaction: discord.Interaction, query: str) -> None:
+    async def _enqueue(
+        self, gp: GuildPlayer, tracks: list, playlist_name: str | None, mode: str
+    ) -> str:
+        op, one_fmt, pl_fmt, refresh = _MODES[mode]
+        for t in tracks:
+            _remember_requester(gp, t)
+        await getattr(gp, op)(tracks)
+        gp.touch_persist()
+        if refresh:
+            await refresh_now_playing(gp)
+        if playlist_name and len(tracks) > 1:
+            return pl_fmt.format(pl=playlist_name, n=len(tracks))
+        return one_fmt.format(title=tracks[0].title)
+
+    async def _play_impl(self, interaction: discord.Interaction, query: str, mode: str) -> None:
         await interaction.response.defer(ephemeral=True)
         gp = await _ensure_player(interaction)
         gp.cancel_idle_timer()
         name = getattr(interaction.user, "display_name", str(interaction.user))
-        tracks, playlist_name = await resolve_tracks(query, name)
-        for t in tracks:
-            _remember_requester(gp, t)
-        await gp.add_many(tracks)
-        gp.touch_persist()
-        await refresh_now_playing(gp)
-        if playlist_name and len(tracks) > 1:
-            await interaction.followup.send(
-                f"➕ Плейлист **{playlist_name}** — {len(tracks)} треков в очередь.",
-                ephemeral=True,
-            )
+
+        if classify_query(query) is SourceKind.SEARCH_TEXT:
+            hits = await search_tracks(query, limit=PICKER_LIMIT)
+            if not hits:
+                raise TrackNotFoundError()
+            if len(hits) > 1:
+                await interaction.followup.send(
+                    f"🔎 «{query}» — выбери, что играть:",
+                    view=TrackPickerView(hits, self._picker_callback(interaction, name, mode)),
+                    ephemeral=True,
+                )
+                return
+            tracks, playlist_name = hits[:1], None
+            tracks[0].requester_name = name
         else:
-            await interaction.followup.send(
-                f"➕ В очередь: **{tracks[0].title}**", ephemeral=True
-            )
+            tracks, playlist_name = await resolve_tracks(query, name)
+
+        msg = await self._enqueue(gp, tracks, playlist_name, mode)
+        await interaction.followup.send(msg, ephemeral=True)
+
+    def _picker_callback(self, origin: discord.Interaction, name: str, mode: str):
+        async def on_pick(interaction: discord.Interaction, track: wavelink.Playable) -> None:
+            # плеер мог отвалиться, пока висела выпадайка
+            gp = state.get(origin.guild_id)  # type: ignore[arg-type]
+            if gp is None:
+                await interaction.response.edit_message(
+                    content="Плеер уже отключился — запусти команду заново.", view=None
+                )
+                return
+            track.requester_name = name
+            msg = await self._enqueue(gp, [track], None, mode)
+            await interaction.response.edit_message(content=msg, view=None)
+
+        return on_pick
+
+    @app_commands.command(description="Поставить трек или плейлист в конец очереди.")
+    @app_commands.describe(query="Ссылка YouTube/SoundCloud/Spotify или название")
+    async def play(self, interaction: discord.Interaction, query: str) -> None:
+        await self._play_impl(interaction, query, "queue")
 
     @app_commands.command(description="Скипнуть всё и сыграть этот трек/плейлист прямо сейчас.")
     @app_commands.describe(query="Ссылка или название")
     async def playskip(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer(ephemeral=True)
-        gp = await _ensure_player(interaction)
-        gp.cancel_idle_timer()
-        name = getattr(interaction.user, "display_name", str(interaction.user))
-        tracks, playlist_name = await resolve_tracks(query, name)
-        for t in tracks:
-            _remember_requester(gp, t)
-        await gp.play_skip_many(tracks)
-        gp.touch_persist()
-        if playlist_name and len(tracks) > 1:
-            await interaction.followup.send(
-                f"⏭ Плейлист **{playlist_name}** — {len(tracks)} треков, играет первый.",
-                ephemeral=True,
-            )
-        else:
-            await interaction.followup.send(
-                f"⏭ Сейчас играет: **{tracks[0].title}**", ephemeral=True
-            )
+        await self._play_impl(interaction, query, "skip")
 
     @app_commands.command(description="Поставить трек/плейлист сразу после текущего.")
     @app_commands.describe(query="Ссылка или название")
     async def playnext(self, interaction: discord.Interaction, query: str) -> None:
-        await interaction.response.defer(ephemeral=True)
-        gp = await _ensure_player(interaction)
-        gp.cancel_idle_timer()
-        name = getattr(interaction.user, "display_name", str(interaction.user))
-        tracks, playlist_name = await resolve_tracks(query, name)
-        for t in tracks:
-            _remember_requester(gp, t)
-        await gp.play_next_many(tracks)
-        gp.touch_persist()
-        await refresh_now_playing(gp)
-        if playlist_name and len(tracks) > 1:
-            await interaction.followup.send(
-                f"⏩ Плейлист **{playlist_name}** — {len(tracks)} треков следом.",
-                ephemeral=True,
-            )
-        else:
-            await interaction.followup.send(
-                f"⏩ Следующим: **{tracks[0].title}**", ephemeral=True
-            )
+        await self._play_impl(interaction, query, "next")
 
     @app_commands.command(description="Пропустить текущий трек.")
     async def skip(self, interaction: discord.Interaction) -> None:
