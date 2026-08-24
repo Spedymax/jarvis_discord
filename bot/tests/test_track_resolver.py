@@ -55,3 +55,12 @@ async def test_load_exception_raises(monkeypatch):
     )
     with pytest.raises(TrackNotFoundError):
         await resolve_tracks("boom", "spedy")
+
+
+async def test_search_prefix_not_doubled(monkeypatch):
+    """wavelink default source=ytmsearch: поверх нашего ytsearch: ломал текстовый поиск."""
+    spy = AsyncMock(return_value=[MagicMock()])
+    monkeypatch.setattr(wavelink.Playable, "search", spy)
+    await resolve_tracks("sirius", "spedy")
+    assert spy.await_args.args[0] == "ytsearch:sirius"
+    assert spy.await_args.kwargs["source"] is None

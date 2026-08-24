@@ -6,12 +6,15 @@ import wavelink
 from .errors import TrackNotFoundError
 from .sources import to_lavalink_query
 
+# to_lavalink_query уже ставит префикс (ytsearch:). Без source=None wavelink
+# лепит поверх свой дефолтный ytmsearch: → "ytmsearch:ytsearch:foo" и поиск пустой.
+
 
 async def resolve_tracks(query: str, requester_name: str) -> tuple[list, str | None]:
     """Return (tracks, playlist_name|None). Raises TrackNotFoundError on no match."""
     lavalink_query = to_lavalink_query(query)
     try:
-        results = await wavelink.Playable.search(lavalink_query)
+        results = await wavelink.Playable.search(lavalink_query, source=None)
     except wavelink.LavalinkLoadException:
         raise TrackNotFoundError()
     if not results:
@@ -34,7 +37,7 @@ async def search_tracks(query: str, limit: int = 8) -> list:
     """
     lavalink_query = to_lavalink_query(query)
     try:
-        results = await wavelink.Playable.search(lavalink_query)
+        results = await wavelink.Playable.search(lavalink_query, source=None)
     except wavelink.LavalinkLoadException:
         return []
     if not results:
