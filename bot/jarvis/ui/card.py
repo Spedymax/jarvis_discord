@@ -409,8 +409,8 @@ async def _do_refresh(gp: "GuildPlayer", view: discord.ui.View | None) -> None:
 #
 # The layout card shows the pool picture as a media item instead of a rendered
 # card. Landscape pictures go as they are. Portrait/square ones would be cropped
-# by Discord's gallery, so they get the same treatment as the old card: blurred
-# cover behind, the full picture standing at the right edge.
+# by Discord's gallery, so they get a blurred cover behind and the full picture
+# standing centred on top of it.
 
 MEDIA_W, MEDIA_H = 1280, 720
 MEDIA_FILENAME = "bg.jpg"
@@ -433,7 +433,7 @@ def compose_background_media(src: Image.Image) -> Image.Image:
 
     Landscape: scaled to MEDIA_W wide. Otherwise a MEDIA_W×MEDIA_H canvas with
     a blurred, darkened cover of the same picture and the picture itself at
-    full height on the right.
+    full height, centred.
     """
     src = src.convert("RGB")
     if src.width / max(1, src.height) >= MEDIA_LANDSCAPE_RATIO:
@@ -450,7 +450,7 @@ def compose_background_media(src: Image.Image) -> Image.Image:
         fg_w = MEDIA_W
         fg_h = max(1, int(src.height * fg_w / max(1, src.width)))
     fg = src.resize((fg_w, fg_h), Image.LANCZOS)
-    canvas.paste(fg, (MEDIA_W - fg_w, (MEDIA_H - fg_h) // 2))
+    canvas.paste(fg, ((MEDIA_W - fg_w) // 2, (MEDIA_H - fg_h) // 2))
     return canvas.convert("RGB")
 
 

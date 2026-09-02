@@ -118,16 +118,18 @@ def test_landscape_media_untouched_aspect():
     assert out.size == (card.MEDIA_W, card.MEDIA_W // 2)
 
 
-def test_portrait_media_gets_canvas_with_picture_on_right():
+def test_portrait_media_gets_canvas_with_picture_centred():
     src = Image.new("RGB", (750, 1000), (250, 10, 10))
     out = card.compose_background_media(src)
     assert out.size == (card.MEDIA_W, card.MEDIA_H)
-    # picture stands full-height at the right edge; left side is the blurred/darkened backdrop
+    # picture stands full-height in the middle; both sides are the blurred/darkened backdrop
     fg_w = int(750 * card.MEDIA_H / 1000)
-    right_px = out.getpixel((card.MEDIA_W - fg_w // 2, card.MEDIA_H // 2))
+    centre_px = out.getpixel((card.MEDIA_W // 2, card.MEDIA_H // 2))
+    edge_of_pic = out.getpixel(((card.MEDIA_W - fg_w) // 2 + 2, card.MEDIA_H // 2))
     left_px = out.getpixel((10, card.MEDIA_H // 2))
-    assert right_px == (250, 10, 10)
-    assert left_px[0] < 250  # darkened backdrop
+    right_px = out.getpixel((card.MEDIA_W - 10, card.MEDIA_H // 2))
+    assert centre_px == (250, 10, 10) and edge_of_pic == (250, 10, 10)
+    assert left_px[0] < 250 and right_px[0] < 250  # darkened backdrop on both sides
 
 
 def test_square_counts_as_portrait():
