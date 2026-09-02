@@ -5,13 +5,16 @@ server:
 plugins:
   lavasrc:
     providers:
+      # ytsearch: обслуживается yt-dlp source (см. sources.ytdlp), не youtube-plugin
       - "ytsearch:\"%ISRC%\""
       - "ytsearch:%QUERY%"
+      - "scsearch:%QUERY%"
     sources:
       spotify: true
       applemusic: false
       deezer: false
       yandexmusic: false
+      ytdlp: true
     spotify:
       clientId: "${SPOTIFY_CLIENT_ID}"
       clientSecret: "${SPOTIFY_CLIENT_SECRET}"
@@ -19,24 +22,23 @@ plugins:
       playlistLoadLimit: 100
       albumLoadLimit: 100
       preferAnonymousToken: false
+    ytdlp:
+      path: "/usr/local/bin/yt-dlp"
+      searchLimit: 10
+      playlistLoadLimit: 100
+      mixPlaylistLoadLimit: 25
 
+  # youtube-plugin выключен — YouTube ломает его быстрее, чем выходят релизы
+  # (SABR-only форматы, cipher, bot-check). YouTube обслуживает yt-dlp через lavasrc.
+  # Откат: enabled: true + lavasrc sources.ytdlp: false.
   youtube:
-    enabled: true
-    allowSearch: true
-    allowDirectVideoIds: true
-    allowDirectPlaylistIds: true
-    clients:
-      - MUSIC
-      - ANDROID_VR
-      - WEB
-      - MWEB
-      - TVHTML5_SIMPLY
-      - WEBEMBEDDED
+    enabled: false
 
 lavalink:
   plugins:
-    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
       repository: "https://maven.lavalink.dev/releases"
+    # оставлен выключенным (plugins.youtube.enabled: false) для быстрого отката
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.1"
       repository: "https://maven.lavalink.dev/releases"
   pluginsDir: "/opt/Lavalink/plugins"

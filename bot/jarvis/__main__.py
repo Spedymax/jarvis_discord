@@ -15,11 +15,13 @@ from .config import Settings
 from .player import GuildPlayer
 from .db import init_db
 from .errors import JarvisError
+from .fallback import try_fallback
 from .logging_setup import setup_logging
 from .observability import init_sentry
 from .persistence import save_player_state
-from .ui.card import BG_EXT, BG_POOL_DIR, build_card_file, pick_background
-from .ui.controls import ControlsView
+from .ui.card import BG_EXT, BG_POOL_DIR, pick_background
+from .ui.controls import handle_player_error
+from .ui.nowplaying import post_now_playing
 from .web.events import broadcast_player
 
 log = logging.getLogger("jarvis")
@@ -48,6 +50,7 @@ def build_bot(settings: Settings) -> commands.Bot:
             "jarvis.cogs.sound",
             "jarvis.cogs.tts",
             "jarvis.cogs.hotkeys",
+            "jarvis.cogs.history",
         ):
             await bot.load_extension(ext)
 
@@ -122,7 +125,6 @@ def build_bot(settings: Settings) -> commands.Bot:
             except Exception:
                 log.debug("record_track_play failed", exc_info=True)
             gp.current_background = pick_background()
-            view = ControlsView(gp)
             if gp.nowplaying_msg is not None:
                 try:
                     await gp.nowplaying_msg.delete()
@@ -132,10 +134,17 @@ def build_bot(settings: Settings) -> commands.Bot:
             text_channel = gp.text_channel or _pick_text_channel(payload.player)
             if text_channel is None:
                 return
-            file = build_card_file(gp)
-            if file is None:
+            msg = await post_now_playing(gp, text_channel)
+            if msg is None:
                 return
-            gp.nowplaying_msg = await text_channel.send(file=file, view=view, silent=True)
+            if gp.current_track is not track:
+                # Another track started while we were rendering/sending — drop the stale card.
+                try:
+                    await msg.delete()
+                except Exception:
+                    pass
+                return
+            gp.nowplaying_msg = msg
             gp.start_position_ticker()
             gp.touch_persist()
             await broadcast_player(gp)
@@ -180,6 +189,12 @@ def build_bot(settings: Settings) -> commands.Bot:
                 # No music to resume — start idle timer so bot eventually leaves.
                 gp.start_idle_timer()
                 return
+            if _reason_is_load_failed(getattr(payload, "reason", None)) and not _is_sound_track(payload.track):
+                failed = getattr(payload, "original", None) or payload.track
+                replacement = await try_fallback(gp, failed)
+                if replacement is not None:
+                    await _notify_fallback(gp, failed, replacement)
+                    return
             await gp.handle_track_end(payload.track)
             if not gp.wl.playing and not gp.wl.queue:
                 gp.current_track = None
@@ -189,6 +204,29 @@ def build_bot(settings: Settings) -> commands.Bot:
         except Exception:
             sentry_sdk.capture_exception()
             raise
+
+    @bot.event
+    async def on_wavelink_track_exception(payload: wavelink.TrackExceptionEventPayload) -> None:
+        exc = getattr(payload, "exception", None) or {}
+        track = payload.track
+        log.warning(
+            "Track exception: %r (%s) — %s / %s",
+            getattr(track, "title", "?"),
+            getattr(track, "source", "?"),
+            exc.get("message") if isinstance(exc, dict) else exc,
+            exc.get("cause") if isinstance(exc, dict) else "",
+        )
+        sentry_sdk.add_breadcrumb(
+            category="lavalink",
+            level="warning",
+            message="track exception",
+            data={
+                "title": getattr(track, "title", None),
+                "source": getattr(track, "source", None),
+                "uri": getattr(track, "uri", None),
+                "exception": exc if isinstance(exc, dict) else str(exc),
+            },
+        )
 
     @bot.event
     async def on_message(message: discord.Message) -> None:
@@ -259,6 +297,11 @@ def build_bot(settings: Settings) -> commands.Bot:
     ) -> None:
         original = getattr(error, "original", error)
 
+        gp = state.get(interaction.guild_id) if interaction.guild_id else None
+        if gp is not None and isinstance(original, wavelink.LavalinkException):
+            if await handle_player_error(gp, interaction, original):
+                return
+
         with sentry_sdk.new_scope() as scope:
             scope.set_user({"id": interaction.user.id})
             cmd = interaction.command
@@ -305,11 +348,36 @@ def _is_sound_track(track: object) -> bool:
     return "/sounds/" in ident or "/sounds/" in uri
 
 
-def _reason_is_replaced(reason: object) -> bool:
+def _reason_name(reason: object) -> str:
     if reason is None:
-        return False
+        return ""
     name = getattr(reason, "value", None) or getattr(reason, "name", None) or str(reason)
-    return str(name).lower() == "replaced"
+    return str(name).lower()
+
+
+def _reason_is_replaced(reason: object) -> bool:
+    return _reason_name(reason) == "replaced"
+
+
+def _reason_is_load_failed(reason: object) -> bool:
+    # Lavalink v4 sends "loadFailed"; older wavelink enums spelled it LOAD_FAILED.
+    return _reason_name(reason).replace("_", "") == "loadfailed"
+
+
+async def _notify_fallback(gp: GuildPlayer, failed: object, replacement: object) -> None:
+    """Tell the channel why the track changed; the note removes itself after a bit."""
+    channel = gp.text_channel
+    if channel is None:
+        return
+    src = str(getattr(failed, "source", "") or "источник").capitalize()
+    text = (
+        f"⚠️ {src} не отдал **{getattr(failed, 'title', '?')}** — "
+        f"играю **{getattr(replacement, 'title', '?')}** с другого источника."
+    )
+    try:
+        await channel.send(text, silent=True, delete_after=25)
+    except Exception:
+        log.debug("fallback notice failed", exc_info=True)
 
 
 def _pick_text_channel(player: wavelink.Player) -> discord.TextChannel | None:

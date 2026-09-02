@@ -9,7 +9,7 @@ from discord.ext import commands
 
 from .. import state
 from ..errors import NotPlayingError
-from ..ui.card import refresh_now_playing
+from ..ui.nowplaying import refresh_now_playing
 
 _EFFECT_LABELS = {
     "off":       "выкл",

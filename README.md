@@ -10,7 +10,7 @@ Self-hosted music bot using discord.py + Lavalink. Supports YouTube, SoundCloud,
 
 ## Commands
 
-`/play` `/playskip` `/playnext` `/skip` `/stop` `/pause` `/resume` `/queue` `/loop` `/bassboost`
+`/play` `/playskip` `/playnext` `/skip` `/stop` `/pause` `/resume` `/queue` `/loop` `/bassboost` `/effect` `/history` `/replay` `/tts` `/sound …` `/s` `/hotkey …`
 
 ## Development
 
@@ -91,3 +91,39 @@ sudo docker exec jarvis-watchtower /watchtower --run-once jarvis-bot
 ```
 
 See [`docs/superpowers/specs/2026-05-05-discord-music-bot-design.md`](docs/superpowers/specs/2026-05-05-discord-music-bot-design.md) for full design.
+## yt-dlp (YouTube source)
+
+YouTube is served by `yt-dlp` through the LavaSrc `ytdlp` source (the youtube-plugin is disabled,
+see `lavalink/application.yml`). The binary lives at `bin/yt-dlp` on the host and is bind-mounted
+into the Lavalink container. YouTube breaks old versions regularly, so keep it fresh:
+
+```
+scripts/update-ytdlp.sh            # downloads latest release, verifies it runs, swaps atomically
+```
+
+Suggested cron (weekly, Monday 06:00):
+
+```
+0 6 * * 1  /home/spedymax/jarvis/scripts/update-ytdlp.sh >> /home/spedymax/logs/ytdlp-update.log 2>&1
+```
+
+No Lavalink restart is needed — the binary is spawned per request.
+
+## Playback fallback
+
+If Lavalink fails to load a track (typical: SoundCloud stream returns 404), the bot searches the
+same title on the other source (SoundCloud → YouTube, YouTube → SoundCloud) and plays that instead.
+Each track is retried once; the channel gets a short self-deleting notice.
+
+## Now-playing card
+
+Two modes, switched with `CARD_MODE`:
+
+- `layout` (default) — a Discord Components V2 container: title as a link, text progress bar,
+  the pool background as a media item, meta line, two button rows. A progress tick is a view edit
+  with no file upload. Portrait/square backgrounds are composed onto a blurred 16:9 canvas with the
+  picture standing full-height on the right so the gallery does not crop it.
+- `image` — the classic rendered card (PIL) with the button panel. Rendering is cached per
+  background and runs off the event loop.
+
+Backgrounds are added by DM-ing the bot an image; they land in `data/backgrounds/`.

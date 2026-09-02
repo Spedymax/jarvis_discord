@@ -322,7 +322,10 @@ async def _ensure_voice(interaction: discord.Interaction) -> GuildPlayer:
         return gp
 
     wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    wl_player.autoplay = wavelink.AutoPlayMode.partial
+    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
+    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
+    # would race those handlers, so keep it off.
+    wl_player.autoplay = wavelink.AutoPlayMode.disabled
     gp = GuildPlayer(wl=wl_player, text_channel=interaction.channel)
     state.register(interaction.guild_id, gp)  # type: ignore[arg-type]
     return gp
@@ -345,7 +348,10 @@ async def ensure_voice_for_member(member: discord.Member) -> GuildPlayer | None:
         return gp
 
     wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    wl_player.autoplay = wavelink.AutoPlayMode.partial
+    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
+    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
+    # would race those handlers, so keep it off.
+    wl_player.autoplay = wavelink.AutoPlayMode.disabled
     gp = GuildPlayer(wl=wl_player, text_channel=None)
     state.register(member.guild.id, gp)
     return gp

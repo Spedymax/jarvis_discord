@@ -19,7 +19,7 @@ from ..errors import (
 from ..player import GuildPlayer
 from ..sources import SourceKind, classify_query
 from ..track_resolver import resolve_tracks, search_tracks
-from ..ui.card import refresh_now_playing
+from ..ui.nowplaying import refresh_now_playing
 from ..ui.track_picker import PICKER_LIMIT, TrackPickerView
 
 log = logging.getLogger(__name__)
@@ -38,7 +38,10 @@ async def _ensure_player(interaction: discord.Interaction) -> GuildPlayer:
         return gp
 
     wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    wl_player.autoplay = wavelink.AutoPlayMode.partial
+    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
+    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
+    # would race those handlers, so keep it off.
+    wl_player.autoplay = wavelink.AutoPlayMode.disabled
     gp = GuildPlayer(wl=wl_player, text_channel=interaction.channel)
     state.register(interaction.guild_id, gp)  # type: ignore[arg-type]
     return gp
@@ -59,6 +62,20 @@ _MODES = {
 }
 
 
+async def enqueue(gp: GuildPlayer, tracks: list, playlist_name: str | None, mode: str) -> str:
+    """Put tracks on the player in the given mode ("queue" / "skip" / "next"); return the user-facing reply."""
+    op, one_fmt, pl_fmt, refresh = _MODES[mode]
+    for t in tracks:
+        _remember_requester(gp, t)
+    await getattr(gp, op)(tracks)
+    gp.touch_persist()
+    if refresh:
+        await refresh_now_playing(gp)
+    if playlist_name and len(tracks) > 1:
+        return pl_fmt.format(pl=playlist_name, n=len(tracks))
+    return one_fmt.format(title=tracks[0].title)
+
+
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -66,16 +83,7 @@ class Music(commands.Cog):
     async def _enqueue(
         self, gp: GuildPlayer, tracks: list, playlist_name: str | None, mode: str
     ) -> str:
-        op, one_fmt, pl_fmt, refresh = _MODES[mode]
-        for t in tracks:
-            _remember_requester(gp, t)
-        await getattr(gp, op)(tracks)
-        gp.touch_persist()
-        if refresh:
-            await refresh_now_playing(gp)
-        if playlist_name and len(tracks) > 1:
-            return pl_fmt.format(pl=playlist_name, n=len(tracks))
-        return one_fmt.format(title=tracks[0].title)
+        return await enqueue(gp, tracks, playlist_name, mode)
 
     async def _play_impl(self, interaction: discord.Interaction, query: str, mode: str) -> None:
         await interaction.response.defer(ephemeral=True)

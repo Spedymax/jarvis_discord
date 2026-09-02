@@ -37,12 +37,16 @@ class GuildPlayer:
     interrupted_position_ms: int = 0
     sound_interaction: Any | None = None
     original_volume: int = 100
+    fallback_tried: set[str] = field(default_factory=set, repr=False)
+    card_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     idle_task: asyncio.Task[None] | None = field(default=None, repr=False)
     persist_task: asyncio.Task[None] | None = field(default=None, repr=False)
     position_ticker_task: asyncio.Task[None] | None = field(default=None, repr=False)
 
     PERSIST_DEBOUNCE_SECONDS: ClassVar[float] = 1.0
     POSITION_TICK_SECONDS: ClassVar[float] = 15.0
+    # Re-render the now-playing card (progress bar) every N ticks. 1 == every tick.
+    CARD_REFRESH_EVERY_TICKS: ClassVar[int] = 1
 
     async def add(self, track: Any) -> None:
         """Append to queue; start playback if idle."""
@@ -162,12 +166,54 @@ class GuildPlayer:
             await self.wl.disconnect()
         except Exception:
             log.exception("Failed to disconnect on idle")
-        if self.nowplaying_msg is not None:
+        await self._delete_nowplaying()
+
+    async def _delete_nowplaying(self) -> None:
+        msg = self.nowplaying_msg
+        self.nowplaying_msg = None
+        if msg is not None:
             try:
-                await self.nowplaying_msg.delete()
+                await msg.delete()
             except Exception:
                 pass
-            self.nowplaying_msg = None
+
+    async def teardown(self, *, reason: str = "") -> None:
+        """Forget this player completely: timers, persisted state, registry, voice.
+
+        Used when Lavalink no longer knows the player (404 on update — the
+        node was restarted) and the wrapper is a zombie.
+        """
+        from . import state
+        from .persistence import delete_player_state
+
+        log.warning("Tearing down player for guild %s%s", getattr(self.wl.guild, "id", "?"),
+                    f": {reason}" if reason else "")
+        self.cancel_idle_timer()
+        self.cancel_position_ticker()
+        if self.persist_task is not None and not self.persist_task.done():
+            self.persist_task.cancel()
+        self.persist_task = None
+        try:
+            self.wl.queue.clear()
+        except Exception:
+            pass
+        guild_id = getattr(getattr(self.wl, "guild", None), "id", None)
+        if guild_id is not None:
+            try:
+                await delete_player_state(int(guild_id))
+            except Exception:
+                log.debug("delete_player_state failed", exc_info=True)
+            state.unregister(int(guild_id))
+        try:
+            await self.wl.disconnect(force=True)
+        except TypeError:
+            try:
+                await self.wl.disconnect()
+            except Exception:
+                pass
+        except Exception:
+            pass
+        await self._delete_nowplaying()
 
     async def _rebuild_filters(self) -> None:
         """Apply current bassboost EQ + effect as a single Lavalink filter update."""
@@ -273,10 +319,26 @@ class GuildPlayer:
         self.position_ticker_task = None
 
     async def _position_ticker(self) -> None:
+        tick = 0
         try:
             while True:
                 await asyncio.sleep(self.POSITION_TICK_SECONDS)
+                tick += 1
                 self.touch_persist()
                 await self._emit_ws()
+                if self.CARD_REFRESH_EVERY_TICKS and tick % self.CARD_REFRESH_EVERY_TICKS == 0:
+                    await self._refresh_card()
         except asyncio.CancelledError:
             return
+
+    async def _refresh_card(self) -> None:
+        """Re-render the now-playing card so the progress bar moves (best-effort)."""
+        if self.nowplaying_msg is None or self.playing_sound:
+            return
+        if getattr(self.wl, "paused", False):
+            return  # position isn't moving; the pause button already redrew the card
+        try:
+            from .ui.nowplaying import refresh_now_playing
+            await refresh_now_playing(self)
+        except Exception:
+            log.debug("card refresh failed", exc_info=True)

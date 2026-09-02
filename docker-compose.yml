@@ -13,6 +13,7 @@ services:
       - ./lavalink/plugins:/opt/Lavalink/plugins
       - ./logs/lavalink:/var/log/lavalink
       - ./data/sounds:/app/data/sounds:ro
+      - ./bin/yt-dlp:/usr/local/bin/yt-dlp:ro
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- --header=\"Authorization: $$LAVALINK_PASSWORD\" http://localhost:2333/version || exit 1"]
@@ -23,9 +24,9 @@ services:
     mem_limit: 1g
 
   bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
+    image: ghcr.io/spedymax/jarvis_discord:latest
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     container_name: jarvis-bot
     restart: unless-stopped
     depends_on:
