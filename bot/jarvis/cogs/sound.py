@@ -23,7 +23,7 @@ from ..errors import (
     TrackNotFoundError,
     WrongVoiceChannelError,
 )
-from ..player import GuildPlayer
+from ..player import GuildPlayer, connect_player
 from ..sources import SourceKind, classify_query
 from ..ui.soundboard import SoundboardView, build_panel_embed
 from ..ui.sound_settings import VolumeView
@@ -321,11 +321,7 @@ async def _ensure_voice(interaction: discord.Interaction) -> GuildPlayer:
         gp.text_channel = interaction.channel
         return gp
 
-    wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
-    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
-    # would race those handlers, so keep it off.
-    wl_player.autoplay = wavelink.AutoPlayMode.disabled
+    wl_player: wavelink.Player = await connect_player(voice.channel)
     gp = GuildPlayer(wl=wl_player, text_channel=interaction.channel)
     state.register(interaction.guild_id, gp)  # type: ignore[arg-type]
     return gp
@@ -347,11 +343,7 @@ async def ensure_voice_for_member(member: discord.Member) -> GuildPlayer | None:
             return None  # bot busy elsewhere
         return gp
 
-    wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
-    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
-    # would race those handlers, so keep it off.
-    wl_player.autoplay = wavelink.AutoPlayMode.disabled
+    wl_player: wavelink.Player = await connect_player(voice.channel)
     gp = GuildPlayer(wl=wl_player, text_channel=None)
     state.register(member.guild.id, gp)
     return gp

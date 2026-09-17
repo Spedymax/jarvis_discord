@@ -12,7 +12,7 @@ from discord.ext import commands
 
 from . import state
 from .config import Settings
-from .player import GuildPlayer
+from .player import GuildPlayer, connect_player, force_disconnect
 from .db import init_db
 from .errors import JarvisError
 from .fallback import try_fallback
@@ -271,11 +271,23 @@ def build_bot(settings: Settings) -> commands.Bot:
         if member.id == bot_id:
             if before.channel is not None and after.channel is None:
                 from .persistence import delete_player_state
+                log.warning(
+                    "Bot left voice %s in guild %s externally — clearing state",
+                    before.channel.id,
+                    member.guild.id,
+                )
                 gp = state.get(member.guild.id)
                 if gp is not None:
                     gp.cancel_position_ticker()
                 await delete_player_state(member.guild.id)
                 state.unregister(member.guild.id)
+                # discord.py can leave the client registered on the guild after an
+                # external disconnect, and that orphan is what poisons every later
+                # connect(). Drop only the one still pointing at the channel we just
+                # left, so a reconnect that raced this event survives.
+                vc = member.guild.voice_client
+                if getattr(getattr(vc, "channel", None), "id", None) == before.channel.id:
+                    await force_disconnect(vc)
             return
 
         # A human left a channel — check if bot is now alone.
@@ -464,7 +476,7 @@ async def restore_players(bot: commands.Bot) -> None:
             continue
 
         try:
-            player = await voice_channel.connect(cls=wavelink.Player)
+            player = await connect_player(voice_channel)
         except Exception:
             log.exception("Failed to connect to voice for guild %s", row.guild_id)
             sentry_sdk.capture_exception()

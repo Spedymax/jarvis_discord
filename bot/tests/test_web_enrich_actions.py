@@ -87,3 +87,22 @@ async def test_leave(monkeypatch):
         gp.wl.disconnect.assert_awaited_once()
     finally:
         await c.close()
+
+
+async def test_leave_drops_orphaned_voice_client(monkeypatch):
+    """Registry empty but the voice client still live — /leave is the only way
+    out of that desync without restarting the process."""
+    orphan = MagicMock(); orphan.disconnect = AsyncMock(); orphan.cleanup = MagicMock()
+    bot = _bot(); bot.get_guild = MagicMock(return_value=MagicMock(voice_client=orphan))
+    monkeypatch.setattr("jarvis.state.get", lambda gid: None)
+    app = create_app(bot, _settings(), started_at=int(time.time()))
+    c = TestClient(TestServer(app)); await c.start_server()
+    try:
+        c.session.cookie_jar.update_cookies({SESSION_COOKIE: _cookie()})
+        resp = await c.post("/api/guilds/1/leave")
+        assert resp.status == 200
+        assert (await resp.json())["left"] is True
+        orphan.disconnect.assert_awaited()
+        orphan.cleanup.assert_called_once()
+    finally:
+        await c.close()

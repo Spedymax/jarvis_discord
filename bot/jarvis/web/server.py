@@ -523,14 +523,22 @@ async def cmd_leave(request):
     bot, _, err = await _require_sound_control(request, request.match_info["gid"])
     if err:
         return err
-    gp = state.get(int(request.match_info["gid"]))
+    from ..player import force_disconnect
+    gid = int(request.match_info["gid"])
+    gp = state.get(gid)
     left = False
     if gp is not None:
-        try:
-            await gp.wl.disconnect()
+        await force_disconnect(gp.wl)
+        left = True
+    else:
+        # Registry empty but the voice client can still be live (desync after an
+        # external disconnect). This button is the only way out without a restart.
+        guild = bot.get_guild(gid)
+        vc = guild.voice_client if guild is not None else None
+        if vc is not None:
+            log.warning("Leave: dropping orphaned voice client in guild %s", gid)
+            await force_disconnect(vc)
             left = True
-        except Exception:
-            pass
     return web.json_response({"ok": True, "left": left})
 
 

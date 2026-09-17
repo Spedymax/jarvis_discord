@@ -20,6 +20,66 @@ log = logging.getLogger(__name__)
 IDLE_DISCONNECT_SECONDS = 60
 
 
+async def force_disconnect(vc: Any) -> None:
+    """Drop a voice client whatever state it is in, leaving guild.voice_client clear.
+
+    disconnect() on its own is not enough: if the voice websocket is already
+    gone it raises, and discord.py keeps the client registered on the guild —
+    which is what makes every later connect() fail with "Already connected".
+    """
+    if vc is None:
+        return
+    try:
+        await vc.disconnect(force=True)
+    except TypeError:
+        try:
+            await vc.disconnect()
+        except Exception:
+            log.debug("disconnect failed", exc_info=True)
+    except Exception:
+        log.debug("force disconnect failed", exc_info=True)
+    try:
+        vc.cleanup()
+    except Exception:
+        log.debug("voice client cleanup failed", exc_info=True)
+
+
+async def connect_player(channel: Any) -> Any:
+    """Connect a wavelink.Player to `channel`, healing a registry desync.
+
+    The state registry and discord.py's guild.voice_client drift apart when the
+    bot is pulled out of voice externally, or when a disconnect fails halfway.
+    Callers only get here with an empty registry, so a voice client still sitting
+    on the guild is an orphan nothing can control: adopt it when it is already in
+    the right channel, evict it otherwise.
+    """
+    import wavelink
+
+    guild = channel.guild
+    existing = guild.voice_client
+    if existing is not None:
+        if isinstance(existing, wavelink.Player) and getattr(existing.channel, "id", None) == channel.id:
+            log.warning("Adopting orphaned voice client in guild %s", guild.id)
+            existing.autoplay = wavelink.AutoPlayMode.disabled
+            return existing
+        log.warning("Evicting stale voice client in guild %s", guild.id)
+        await force_disconnect(existing)
+
+    try:
+        player = await channel.connect(cls=wavelink.Player)
+    except Exception:
+        # A failed connect can leave a half-open client on the guild (wavelink's
+        # 30s channel timeout does exactly that), poisoning every later attempt.
+        await force_disconnect(guild.voice_client)
+        raise
+
+    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
+    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
+    # would race those handlers, so keep it off.
+    player.autoplay = wavelink.AutoPlayMode.disabled
+    return player
+
+
 @dataclass
 class GuildPlayer:
     wl: Any  # wavelink.Player or test mock
@@ -162,10 +222,7 @@ class GuildPlayer:
             await asyncio.sleep(IDLE_DISCONNECT_SECONDS)
         except asyncio.CancelledError:
             return
-        try:
-            await self.wl.disconnect()
-        except Exception:
-            log.exception("Failed to disconnect on idle")
+        await force_disconnect(self.wl)
         await self._delete_nowplaying()
 
     async def _delete_nowplaying(self) -> None:
@@ -198,21 +255,16 @@ class GuildPlayer:
         except Exception:
             pass
         guild_id = getattr(getattr(self.wl, "guild", None), "id", None)
+        # Disconnect first: unregistering before a disconnect that fails leaves a
+        # live voice client with no registry entry, and then every connect()
+        # raises "Already connected" until the process restarts.
+        await force_disconnect(self.wl)
         if guild_id is not None:
             try:
                 await delete_player_state(int(guild_id))
             except Exception:
                 log.debug("delete_player_state failed", exc_info=True)
             state.unregister(int(guild_id))
-        try:
-            await self.wl.disconnect(force=True)
-        except TypeError:
-            try:
-                await self.wl.disconnect()
-            except Exception:
-                pass
-        except Exception:
-            pass
         await self._delete_nowplaying()
 
     async def _rebuild_filters(self) -> None:

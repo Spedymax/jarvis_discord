@@ -16,7 +16,7 @@ from ..errors import (
     TrackNotFoundError,
     WrongVoiceChannelError,
 )
-from ..player import GuildPlayer
+from ..player import GuildPlayer, connect_player
 from ..sources import SourceKind, classify_query
 from ..track_resolver import resolve_tracks, search_tracks
 from ..ui.nowplaying import refresh_now_playing
@@ -37,11 +37,7 @@ async def _ensure_player(interaction: discord.Interaction) -> GuildPlayer:
         gp.text_channel = interaction.channel
         return gp
 
-    wl_player: wavelink.Player = await voice.channel.connect(cls=wavelink.Player)
-    # The bot advances the queue itself in on_wavelink_track_end (loop modes,
-    # sound interrupts, load-failure fallback). Wavelink's own auto-advance
-    # would race those handlers, so keep it off.
-    wl_player.autoplay = wavelink.AutoPlayMode.disabled
+    wl_player: wavelink.Player = await connect_player(voice.channel)
     gp = GuildPlayer(wl=wl_player, text_channel=interaction.channel)
     state.register(interaction.guild_id, gp)  # type: ignore[arg-type]
     return gp
