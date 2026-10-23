@@ -10,7 +10,7 @@ import sentry_sdk
 import wavelink
 from discord.ext import commands
 
-from . import state
+from . import state, wavelink_patch
 from .config import Settings
 from .player import GuildPlayer, connect_player, force_disconnect
 from .db import init_db
@@ -37,6 +37,7 @@ def build_bot(settings: Settings) -> commands.Bot:
     async def setup_hook() -> None:
         await init_db(settings.data_dir / "bot.sqlite")
 
+        wavelink_patch.apply()
         node = wavelink.Node(
             uri=f"http://{settings.lavalink_host}:{settings.lavalink_port}",
             password=settings.lavalink_password,
