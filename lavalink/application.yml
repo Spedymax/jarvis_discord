@@ -34,6 +34,11 @@ plugins:
   youtube:
     enabled: false
 
+  # SoundCloud отдаёт только AAC-HLS (fMP4); встроенный lavaplayer-источник его
+  # не умеет ("Did not detect any supported formats"), Soundy умеет.
+  soundy:
+    enabled: true
+
 lavalink:
   plugins:
     - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
@@ -41,13 +46,17 @@ lavalink:
     # оставлен выключенным (plugins.youtube.enabled: false) для быстрого отката
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.1"
       repository: "https://maven.lavalink.dev/releases"
+    # Пин на коммит upstream с фиксом fMP4-HLS (релиза 1.1.0 пока нет).
+    # Откат: убрать плагин + sources.soundcloud: true.
+    - dependency: "com.github.lowkwrs.soundy:plugin:e2c5da8e96"
+      repository: "https://jitpack.io"
   pluginsDir: "/opt/Lavalink/plugins"
   server:
     password: "${LAVALINK_PASSWORD}"
     sources:
       youtube: false
       bandcamp: true
-      soundcloud: true
+      soundcloud: false  # обслуживает Soundy (plugins.soundy)
       twitch: false
       vimeo: false
       http: false
